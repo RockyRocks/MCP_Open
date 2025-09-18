@@ -1,0 +1,23 @@
+name: CI
+on: [push, pull_request]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configure
+        run: cmake -S . -B build -DUSE_UWS=ON
+      - name: Build
+        run: cmake --build build -j
+      - name: Test
+        run: ctest --test-dir build
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configure
+        run: cmake -S . -B build -DUSE_UWS=OFF
+      - name: Build
+        run: cmake --build build --config Release
