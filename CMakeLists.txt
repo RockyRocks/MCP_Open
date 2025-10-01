@@ -8,31 +8,34 @@ option(USE_UWS "Use uWebSockets (async) server" ON)
 option(USE_UNITY_BUILD "Enable unity build" ON)
 set(TEST_FRAMEWORK "GTest" CACHE STRING "GTest or Catch2")
 
+# set(JSON_Install OFF CACHE INTERNAL "")
+# set(JSON_VALIDATOR_INSTALL OFF CACHE INTERNAL "")
+
 include(FetchContent)
+include(CMakeFindDependencyMacro)
+
+# json-schema-validator
+FetchContent_Declare(
+  jsv
+  GIT_REPOSITORY https://github.com/pboettch/json-schema-validator.git
+  GIT_TAG 2.3.0
+)
 
 # nlohmann json
 FetchContent_Declare(
-  nlohmann_json
+  json
   GIT_REPOSITORY https://github.com/nlohmann/json.git
   GIT_TAG v3.11.2
 )
-FetchContent_MakeAvailable(nlohmann_json)
+FetchContent_MakeAvailable(json jsv)
 
 # cpp-httplib (fallback)
 FetchContent_Declare(
   httplib
   GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
-  GIT_TAG v0.13.5
+  GIT_TAG v0.26.0
 )
 FetchContent_MakeAvailable(httplib)
-
-# json-schema-validator
-FetchContent_Declare(
-  jschema
-  GIT_REPOSITORY https://github.com/pboettch/json-schema-validator.git
-  GIT_TAG master
-)
-FetchContent_MakeAvailable(jschema)
 
 # uWebSockets (optional)
 if(USE_UWS)
@@ -92,12 +95,19 @@ endif()
 
 add_library(core STATIC ${SOURCES})
 target_include_directories(core PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_link_libraries(core PUBLIC nlohmann_json::nlohmann_json)
+
+# Should use these when embedding.
+# find_package(nlohmann_json_schema_validator REQUIRED)
+# find_package(nlohmann_json 3.11.2 REQUIRED)
+
+target_link_libraries(core PRIVATE
+  nlohmann_json::nlohmann_json
+  nlohmann_json_schema_validator)
 
 if(USE_UWS)
-  target_link_libraries(core PUBLIC uSockets)
+  target_link_libraries(core PRIVATE uSockets)
 else()
-  target_link_libraries(core PUBLIC httplib::httplib)
+  target_link_libraries(core PRIVATE httplib::httplib)
 endif()
 
 add_executable(mcp_server src/server_entry.cpp)

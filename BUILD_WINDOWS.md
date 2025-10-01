@@ -1,11 +1,13 @@
 # Windows Build Instructions
 
 Requirements:
+
 - Visual Studio 2022 or later (C++ workload)
 - CMake 3.20+
 - vcpkg (recommended) or install dependencies manually
 
 Using vcpkg:
+
 1. Clone repo and bootstrap vcpkg
 2. Install needed libs (zlib, openssl, etc.) via vcpkg
 3. Configure CMake with vcpkg toolchain file:
