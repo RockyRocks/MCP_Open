@@ -84,7 +84,7 @@ else()
 endif()
 
 if(USE_UNITY_BUILD)
-  file(WRITE ${CMAKE_BINARY_DIR}/unity_build.cpp "#include \"${PROJECT_SOURCE_DIR}/src/ProtocolHandler.cpp\"\n#include \"${PROJECT_SOURCE_DIR}/src/JsonSchemaValidator.cpp\"\n#include \"${PROJECT_SOURCE_DIR}/src/Logger.cpp\"\n#include \"src/ThreadPool_header.cpp\"\n#include \"${PROJECT_SOURCE_DIR}/src/EchoCommand.cpp\"\n")
+  file(WRITE ${CMAKE_BINARY_DIR}/unity_build.cpp "#include \"${PROJECT_SOURCE_DIR}/src/ProtocolHandler.cpp\"\n#include \"${PROJECT_SOURCE_DIR}/src/JsonSchemaValidator.cpp\"\n#include \"${PROJECT_SOURCE_DIR}/src/Logger.cpp\"\n#include \"${PROJECT_SOURCE_DIR}/src/ThreadPool_header.cpp\"\n#include \"${PROJECT_SOURCE_DIR}/src/EchoCommand.cpp\"\n")
   if(USE_UWS)
     file(APPEND ${CMAKE_BINARY_DIR}/unity_build.cpp "#include \"${PROJECT_SOURCE_DIR}/src/UwsServer.cpp\"\n")
   else()
@@ -100,14 +100,14 @@ target_include_directories(core PUBLIC ${PROJECT_SOURCE_DIR}/include)
 # find_package(nlohmann_json_schema_validator REQUIRED)
 # find_package(nlohmann_json 3.11.2 REQUIRED)
 
-target_link_libraries(core PRIVATE
+target_link_libraries(core PUBLIC
   nlohmann_json::nlohmann_json
   nlohmann_json_schema_validator)
 
 if(USE_UWS)
-  target_link_libraries(core PRIVATE uSockets)
+  target_link_libraries(core PUBLIC uSockets)
 else()
-  target_link_libraries(core PRIVATE httplib::httplib)
+  target_link_libraries(core PUBLIC httplib::httplib)
 endif()
 
 add_executable(mcp_server src/server_entry.cpp)

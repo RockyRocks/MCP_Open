@@ -6,7 +6,7 @@ extern void run_uws_server(int port);
 extern void run_httplib_server(int port);
 #endif
 
-int main(int argc, char** argv){
+int main(int /*argc*/, char** /*argv*/){
     int port = 9001;
 #if USE_UWS
     std::cout << "Starting uWebSockets server..." << std::endl;
