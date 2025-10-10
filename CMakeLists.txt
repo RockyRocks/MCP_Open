@@ -14,14 +14,18 @@ set(TEST_FRAMEWORK "GTest" CACHE STRING "GTest or Catch2")
 include(FetchContent)
 include(CMakeFindDependencyMacro)
 
+# ------------------------------------------------------------------------------
 # json-schema-validator
+# ------------------------------------------------------------------------------
 FetchContent_Declare(
   jsv
   GIT_REPOSITORY https://github.com/pboettch/json-schema-validator.git
   GIT_TAG 2.3.0
 )
 
+# ------------------------------------------------------------------------------
 # nlohmann json
+# ------------------------------------------------------------------------------
 FetchContent_Declare(
   json
   GIT_REPOSITORY https://github.com/nlohmann/json.git
@@ -29,7 +33,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json jsv)
 
+# ------------------------------------------------------------------------------
 # cpp-httplib (fallback)
+# ------------------------------------------------------------------------------
 FetchContent_Declare(
   httplib
   GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
@@ -37,16 +43,31 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(httplib)
 
-# uWebSockets (optional)
+# ------------------------------------------------------------------------------
+# uWebSockets dependency management
+# ------------------------------------------------------------------------------
 if(USE_UWS)
+  message(STATUS "Configuring uWebSockets support...")
+  include(FetchContent)
   FetchContent_Declare(
     uwebsockets
     GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
     GIT_TAG v20.47.0
   )
   FetchContent_MakeAvailable(uwebsockets)
+
+  add_library(uwebsockets INTERFACE)
+  target_include_directories(uwebsockets INTERFACE
+    ${uwebsockets_SOURCE_DIR}/src
+    ${uwebsockets_SOURCE_DIR}/uSockets/src
+  )
+  target_compile_definitions(uwebsockets INTERFACE UWS_NO_ZLIB)
+  target_compile_options(uwebsockets INTERFACE -Wall -O3)
 endif()
 
+# ------------------------------------------------------------------------------
+# googletest dependency management
+# ------------------------------------------------------------------------------
 if(TEST_FRAMEWORK STREQUAL "GTest")
   FetchContent_Declare(
     googletest
@@ -62,6 +83,9 @@ else()
   FetchContent_MakeAvailable(catch2)
 endif()
 
+# ------------------------------------------------------------------------------
+# compiler options management
+# ------------------------------------------------------------------------------
 if(MSVC)
   add_compile_options(/W4 /WX /permissive-)
 else()
@@ -105,7 +129,7 @@ target_link_libraries(core PUBLIC
   nlohmann_json_schema_validator)
 
 if(USE_UWS)
-  target_link_libraries(core PUBLIC uSockets)
+  target_link_libraries(core PUBLIC uwebsockets)
 else()
   target_link_libraries(core PUBLIC httplib::httplib)
 endif()

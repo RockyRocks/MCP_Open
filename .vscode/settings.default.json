@@ -1,0 +1,53 @@
+{
+"files.exclude": {
+        "**/.git": true,
+        "**/tmp/": true,
+        "**/tools/": true,
+        "**/bin/": true,
+        "**/extern/": true,
+        "private/": true,
+        "**/anycpu/": true,
+        ".teamcity/": true,
+        "**/*.csproj.user": true,
+        "**/*.log": true,
+        "**/*.sln.DotSettings": true,
+        "**/*.pdb": true,
+        "**/*.dll": true,
+        "**/*.exe": true,
+        "**/*.bff": true,
+        "**/*.vcxproj.filters": true,
+        "**/*.vcxproj": true,
+        "**/*.sln": true,
+        "**/*.csproj": true
+    },
+    "search.exclude": {
+        "**/*.png": true
+    },
+    "files.associations": {
+        "*.sharpmake": "csharp",
+        "*.DotSettings": "xml",
+        "*.editorconfig": "ini",
+        ".p4ignore": "shellscript",
+        "*.json": "jsonc"
+    },
+
+    "extensions.ignoreRecommendations": false,
+    "editor.renderWhitespace": "boundary",
+    "editor.guides.indentation": true,
+    "editor.wordWrap": "off",
+    "editor.formatOnSave": false,
+
+    "editor.rulers": [
+        80,
+        100
+    ],
+
+    "[markdown]": {
+        "editor.wordWrap": "on",
+        "editor.rulers": []
+    },
+
+    "[cpp]": {
+        "editor.rulers": [110]
+    }
+}
