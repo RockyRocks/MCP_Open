@@ -8,7 +8,7 @@ void run_uws_server(int port) {
     ProtocolHandler handler;
     ThreadPool pool(4);
 
-    uWS::App().post("/mcp", [&handler,&pool](auto *res, [[maybe_unsed]] auto *req){
+    uWS::App().post("/mcp", [&handler,&pool](auto *res, [[maybe_unsed]] auto */* req */){
         res->onData([&handler,&pool,res](std::string_view data, bool last){
             if(!last) return;
             try{
@@ -27,7 +27,7 @@ void run_uws_server(int port) {
                 res->writeStatus("500 Internal Server Error")->end(std::string("{\"error\":\"")+e.what()+"\"}");
             }
         });
-    }).get("/health", [](auto *res, [[maybe_unsed]] auto* req){
+    }).get("/health", [](auto *res, [[maybe_unsed]] auto* /* req */){
         res->writeHeader("Content-Type","application/json")->end("{\"status\":\"ok\"}");
     }).listen("0.0.0.0", port, [port](auto *token){
         if(token) std::cout << "uWebSockets listening on " << port << std::endl;
