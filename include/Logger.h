@@ -2,6 +2,7 @@
 #include <string>
 #include <functional>
 
+/// @brief
 class Logger {
 public:
     static Logger& getInstance();

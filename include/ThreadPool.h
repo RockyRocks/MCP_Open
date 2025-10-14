@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <stdexcept>
 
+/// @brief 
 class ThreadPool {
 public:
     ThreadPool(size_t n = std::thread::hardware_concurrency());

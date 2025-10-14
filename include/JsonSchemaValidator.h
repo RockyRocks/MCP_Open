@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 
+/// @brief
 class JsonSchemaValidator {
 public:
     JsonSchemaValidator() = delete;
