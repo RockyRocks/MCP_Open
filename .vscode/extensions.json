@@ -15,5 +15,11 @@
         "jebbs.plantuml",
         "dangmai.workspace-default-settings",
         "vadimcn.vscode-lldb",
+        "codezombiech.gitignore",
+        "DavidAnson.vscode-markdownlint",
+        "donjayamanne.githistory",
+        "EditorConfig.editorconfig",
+        "mdickin.markdown-shortcuts",
+        "waderyan.gitblame"
     ]
 }
