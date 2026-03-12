@@ -1,0 +1,11 @@
+{
+  "name": "translate",
+  "description": "Translate text between languages",
+  "prompt_template": "Translate the following text from {{source_lang}} to {{target_lang}}:\n\n{{input}}",
+  "default_model": "gpt-4o",
+  "default_parameters": {
+    "temperature": 0.1,
+    "max_tokens": 2048
+  },
+  "required_variables": ["input", "target_lang"]
+}

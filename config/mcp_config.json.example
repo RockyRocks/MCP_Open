@@ -1,0 +1,26 @@
+{
+  "server": {
+    "port": 9001,
+    "max_request_body_bytes": 1048576
+  },
+  "thread_pool": {
+    "size": 4
+  },
+  "rate_limit": {
+    "requests_per_minute": 60
+  },
+  "auth": {
+    "enabled": false,
+    "api_key": ""
+  },
+  "litellm": {
+    "base_url": "http://localhost:4000",
+    "default_model": "claude-sonnet"
+  },
+  "skills": {
+    "directory": "skills"
+  },
+  "discovery": {
+    "servers_config": "config/mcp_servers.json"
+  }
+}

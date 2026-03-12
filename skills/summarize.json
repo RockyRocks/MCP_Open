@@ -1,0 +1,11 @@
+{
+  "name": "summarize",
+  "description": "Summarize text into key points",
+  "prompt_template": "Summarize the following text:\n\n{{input}}\n\nProvide {{num_points}} concise key points.",
+  "default_model": "claude-sonnet",
+  "default_parameters": {
+    "temperature": 0.3,
+    "max_tokens": 1024
+  },
+  "required_variables": ["input"]
+}

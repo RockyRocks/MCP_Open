@@ -1,15 +1,14 @@
 cmake_minimum_required(VERSION 3.15)
+cmake_policy(SET CMP0077 NEW)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
 project(MCP_Server_CMake LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(USE_UWS "Use uWebSockets (async) server" ON)
-option(USE_UNITY_BUILD "Enable unity build" ON)
+option(USE_UWS "Use uWebSockets (async) server" OFF)
+option(BUILD_CSHARP "Build C# wrapper (requires dotnet SDK)" ON)
 set(TEST_FRAMEWORK "GTest" CACHE STRING "GTest or Catch2")
-
-# set(JSON_Install OFF CACHE INTERNAL "")
-# set(JSON_VALIDATOR_INSTALL OFF CACHE INTERNAL "")
 
 include(FetchContent)
 include(CMakeFindDependencyMacro)
@@ -34,7 +33,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(json jsv)
 
 # ------------------------------------------------------------------------------
-# cpp-httplib (fallback)
+# cpp-httplib
 # ------------------------------------------------------------------------------
 FetchContent_Declare(
   httplib
@@ -44,11 +43,10 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(httplib)
 
 # ------------------------------------------------------------------------------
-# uWebSockets dependency management
+# uWebSockets (optional)
 # ------------------------------------------------------------------------------
 if(USE_UWS)
   message(STATUS "Configuring uWebSockets support...")
-  include(FetchContent)
   FetchContent_Declare(
     uwebsockets
     GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
@@ -62,11 +60,13 @@ if(USE_UWS)
     ${uwebsockets_SOURCE_DIR}/uSockets/src
   )
   target_compile_definitions(uwebsockets INTERFACE UWS_NO_ZLIB)
-  target_compile_options(uwebsockets INTERFACE -Wall -O3)
+  if(NOT MSVC)
+    target_compile_options(uwebsockets INTERFACE -Wall -O3)
+  endif()
 endif()
 
 # ------------------------------------------------------------------------------
-# googletest dependency management
+# googletest / catch2
 # ------------------------------------------------------------------------------
 if(TEST_FRAMEWORK STREQUAL "GTest")
   FetchContent_Declare(
@@ -84,7 +84,7 @@ else()
 endif()
 
 # ------------------------------------------------------------------------------
-# compiler options management
+# Compiler options
 # ------------------------------------------------------------------------------
 if(MSVC)
   add_compile_options(/W4 /WX /permissive-)
@@ -92,61 +92,127 @@ else()
   add_compile_options(-Wall -Wextra -Wpedantic -Werror -fdiagnostics-color=always -pipe)
 endif()
 
-# Source files
-set(SOURCES
-    src/ProtocolHandler.cpp
-    src/JsonSchemaValidator.cpp
-    src/Logger.cpp
-    src/ThreadPool_header.cpp
-    src/EchoCommand.cpp
+# ------------------------------------------------------------------------------
+# Core static library
+# ------------------------------------------------------------------------------
+set(CORE_SOURCES
+    src/core/ProtocolHandler.cpp
+    src/core/Config.cpp
+    src/core/Logger.cpp
+    src/core/ThreadPool.cpp
+    src/validation/JsonSchemaValidator.cpp
+    src/validation/InputSanitizer.cpp
+    src/commands/CommandRegistry.cpp
+    src/commands/EchoCommand.cpp
+    src/llm/LiteLLMProvider.cpp
+    src/llm/LLMCommand.cpp
+    src/discovery/McpServerRegistry.cpp
+    src/discovery/CompositeCommand.cpp
+    src/skills/SkillEngine.cpp
+    src/skills/SkillCommand.cpp
+    src/http/HttplibClient.cpp
+    src/security/RateLimiter.cpp
+    src/security/ApiKeyValidator.cpp
+    src/security/SecurityHeaders.cpp
+    src/server/HttplibServer.cpp
 )
 
 if(USE_UWS)
-  list(APPEND SOURCES src/UwsServer.cpp)
-else()
-  list(APPEND SOURCES src/HttplibServer.cpp)
+  list(APPEND CORE_SOURCES src/server/UwsServer.cpp)
 endif()
 
-if(USE_UNITY_BUILD)
-  file(WRITE ${CMAKE_BINARY_DIR}/unity_build.cpp "#include \"${PROJECT_SOURCE_DIR}/src/ProtocolHandler.cpp\"\n#include \"${PROJECT_SOURCE_DIR}/src/JsonSchemaValidator.cpp\"\n#include \"${PROJECT_SOURCE_DIR}/src/Logger.cpp\"\n#include \"${PROJECT_SOURCE_DIR}/src/ThreadPool_header.cpp\"\n#include \"${PROJECT_SOURCE_DIR}/src/EchoCommand.cpp\"\n")
-  if(USE_UWS)
-    file(APPEND ${CMAKE_BINARY_DIR}/unity_build.cpp "#include \"${PROJECT_SOURCE_DIR}/src/UwsServer.cpp\"\n")
-  else()
-    file(APPEND ${CMAKE_BINARY_DIR}/unity_build.cpp "#include \"${PROJECT_SOURCE_DIR}/src/HttplibServer.cpp\"\n")
-  endif()
-  set(SOURCES ${CMAKE_BINARY_DIR}/unity_build.cpp)
-endif()
-
-add_library(core STATIC ${SOURCES})
+add_library(core STATIC ${CORE_SOURCES})
 target_include_directories(core PUBLIC ${PROJECT_SOURCE_DIR}/include)
-
-# Should use these when embedding.
-# find_package(nlohmann_json_schema_validator REQUIRED)
-# find_package(nlohmann_json 3.11.2 REQUIRED)
-
 target_link_libraries(core PUBLIC
   nlohmann_json::nlohmann_json
-  nlohmann_json_schema_validator)
+  nlohmann_json_schema_validator
+  httplib::httplib
+)
 
 if(USE_UWS)
   target_link_libraries(core PUBLIC uwebsockets)
-else()
-  target_link_libraries(core PUBLIC httplib::httplib)
+  target_compile_definitions(core PUBLIC USE_UWS=1)
 endif()
 
+# std::filesystem requires explicit linking on GCC < 9 and Clang < 9
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+  target_link_libraries(core PUBLIC stdc++fs)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+  target_link_libraries(core PUBLIC c++fs)
+endif()
+
+# pthreads on Linux/Unix
+if(UNIX)
+  find_package(Threads REQUIRED)
+  target_link_libraries(core PUBLIC Threads::Threads)
+endif()
+
+# ------------------------------------------------------------------------------
+# Server executable
+# ------------------------------------------------------------------------------
 add_executable(mcp_server src/server_entry.cpp)
 target_link_libraries(mcp_server PRIVATE core)
 
+# ------------------------------------------------------------------------------
+# Demo client
+# ------------------------------------------------------------------------------
 add_executable(demo_client src/demo_client.cpp)
 target_link_libraries(demo_client PRIVATE core)
 
+# ------------------------------------------------------------------------------
+# C API shared library
+# ------------------------------------------------------------------------------
+add_library(mcp_capi SHARED capi/src/mcp_capi.cpp)
+target_include_directories(mcp_capi
+  PUBLIC capi/include
+  PRIVATE ${PROJECT_SOURCE_DIR}/include
+)
+target_link_libraries(mcp_capi PRIVATE core)
+target_compile_definitions(mcp_capi PRIVATE MCP_CAPI_EXPORTS)
+set_target_properties(mcp_capi PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
+)
+
+# ------------------------------------------------------------------------------
+# C# wrapper (built via dotnet, triggered from CMake)
+# ------------------------------------------------------------------------------
+if(BUILD_CSHARP)
+  find_program(DOTNET_EXE dotnet)
+  if(DOTNET_EXE)
+    add_custom_target(mcp_csharp ALL
+      COMMAND ${DOTNET_EXE} build ${CMAKE_SOURCE_DIR}/csharp/McpClient.csproj
+              -c $<IF:$<CONFIG:Debug>,Debug,Release>
+              -o ${CMAKE_BINARY_DIR}/csharp
+      DEPENDS mcp_capi
+      COMMENT "Building C# wrapper (McpClient)"
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/csharp
+    )
+  else()
+    message(STATUS "dotnet SDK not found, skipping C# wrapper build")
+  endif()
+endif()
+
+# ------------------------------------------------------------------------------
+# Tests
+# ------------------------------------------------------------------------------
 enable_testing()
+
+set(TEST_SOURCES
+    tests/ProtocolHandlerTest.cpp
+    tests/CommandRegistryTest.cpp
+    tests/InputSanitizerTest.cpp
+    tests/RateLimiterTest.cpp
+    tests/ConfigTest.cpp
+    tests/SkillEngineTest.cpp
+    tests/McpServerRegistryTest.cpp
+)
+
 if(TEST_FRAMEWORK STREQUAL "GTest")
-  add_executable(unit_tests tests/ProtocolHandlerTest.cpp)
+  add_executable(unit_tests ${TEST_SOURCES})
   target_link_libraries(unit_tests PRIVATE core gtest_main)
   add_test(NAME unit_tests COMMAND unit_tests)
 else()
-  add_executable(unit_tests tests/ProtocolHandlerTest.cpp)
+  add_executable(unit_tests ${TEST_SOURCES})
   target_link_libraries(unit_tests PRIVATE core Catch2::Catch2WithMain)
   add_test(NAME unit_tests COMMAND unit_tests)
 endif()
