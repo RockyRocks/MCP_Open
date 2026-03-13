@@ -2,5 +2,5 @@ bin/
 obj/
 .vs/
 *.suo
-build/
+build*/
 .vscode/settings.json
