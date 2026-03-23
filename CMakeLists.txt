@@ -35,10 +35,14 @@ FetchContent_MakeAvailable(json jsv)
 # ------------------------------------------------------------------------------
 # cpp-httplib
 # ------------------------------------------------------------------------------
-set(HTTPLIB_REQUIRE_ZLIB OFF CACHE BOOL "" FORCE)
-set(HTTPLIB_REQUIRE_BROTLI OFF CACHE BOOL "" FORCE)
-set(HTTPLIB_REQUIRE_ZSTD OFF CACHE BOOL "" FORCE)
-set(HTTPLIB_REQUIRE_OPENSSL OFF CACHE BOOL "" FORCE)
+# Disable httplib optional dependency auto-detection.
+# The _IF_AVAILABLE flags cause httplib to find & link zstd/brotli/zlib/openssl
+# when headers happen to be present on the system — but the CMake targets may
+# not exist, leading to "target not found" errors (e.g. zstd::libzstd on CI).
+set(HTTPLIB_USE_OPENSSL_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_USE_ZLIB_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_USE_BROTLI_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_USE_ZSTD_IF_AVAILABLE OFF CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
   httplib
