@@ -35,6 +35,11 @@ FetchContent_MakeAvailable(json jsv)
 # ------------------------------------------------------------------------------
 # cpp-httplib
 # ------------------------------------------------------------------------------
+set(HTTPLIB_REQUIRE_ZLIB OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_REQUIRE_BROTLI OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_REQUIRE_ZSTD OFF CACHE BOOL "" FORCE)
+set(HTTPLIB_REQUIRE_OPENSSL OFF CACHE BOOL "" FORCE)
+
 FetchContent_Declare(
   httplib
   GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
