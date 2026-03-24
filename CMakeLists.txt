@@ -131,6 +131,8 @@ if(USE_UWS)
 endif()
 
 add_library(core STATIC ${CORE_SOURCES})
+# Enable PIC so core can be linked into the mcp_capi shared library on Linux
+set_target_properties(core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(core PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(core PUBLIC
   nlohmann_json::nlohmann_json
