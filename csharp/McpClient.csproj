@@ -6,7 +6,5 @@
     <AssemblyName>McpClient</AssemblyName>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Compile Include="src\**\*.cs" />
-  </ItemGroup>
+
 </Project>
