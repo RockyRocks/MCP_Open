@@ -15,6 +15,7 @@
 #include "security/ApiKeyValidator.h"
 #include "server/IServer.h"
 #include "server/HttplibServer.h"
+#include "server/StdioTransport.h"
 
 #ifdef USE_UWS
 #include "server/UwsServer.h"
@@ -25,12 +26,15 @@
 #include <string>
 
 int main(int argc, char** argv) {
-    // Determine config path from CLI args or default
+    // Determine config path and transport mode from CLI args
     std::string configPath = "config/mcp_config.json";
+    bool stdioMode = false;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--config" && i + 1 < argc) {
             configPath = argv[++i];
+        } else if (arg == "--stdio") {
+            stdioMode = true;
         }
     }
 
@@ -70,6 +74,13 @@ int main(int argc, char** argv) {
     commandRegistry->registerCommand("remote", std::make_shared<CompositeCommand>(mcpRegistry, httpClient));
 
     Logger::getInstance().log("Registered commands: echo, llm, skill, remote");
+
+    // stdio transport mode (MCP protocol over JSON-RPC 2.0)
+    if (stdioMode) {
+        StdioTransport transport(commandRegistry, skillEngine, mcpRegistry);
+        transport.run();
+        return 0;
+    }
 
     // Security
     auto rateLimiter = std::make_shared<RateLimiter>(config.rateLimitRequestsPerMinute());

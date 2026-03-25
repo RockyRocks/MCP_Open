@@ -124,6 +124,7 @@ set(CORE_SOURCES
     src/security/ApiKeyValidator.cpp
     src/security/SecurityHeaders.cpp
     src/server/HttplibServer.cpp
+    src/server/StdioTransport.cpp
 )
 
 if(USE_UWS)
@@ -216,6 +217,7 @@ set(TEST_SOURCES
     tests/ConfigTest.cpp
     tests/SkillEngineTest.cpp
     tests/McpServerRegistryTest.cpp
+    tests/StdioTransportTest.cpp
 )
 
 if(TEST_FRAMEWORK STREQUAL "GTest")
