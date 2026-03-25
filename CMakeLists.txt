@@ -6,6 +6,9 @@ project(MCP_Server_CMake LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Build all static libraries with -fPIC so they can be linked into shared libs (mcp_capi)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 option(USE_UWS "Use uWebSockets (async) server" OFF)
 option(BUILD_CSHARP "Build C# wrapper (requires dotnet SDK)" ON)
 set(TEST_FRAMEWORK "GTest" CACHE STRING "GTest or Catch2")
@@ -132,8 +135,6 @@ if(USE_UWS)
 endif()
 
 add_library(core STATIC ${CORE_SOURCES})
-# Enable PIC so core can be linked into the mcp_capi shared library on Linux
-set_target_properties(core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(core PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(core PUBLIC
   nlohmann_json::nlohmann_json
@@ -181,9 +182,6 @@ target_include_directories(mcp_capi
 )
 target_link_libraries(mcp_capi PRIVATE core)
 target_compile_definitions(mcp_capi PRIVATE MCP_CAPI_EXPORTS)
-set_target_properties(mcp_capi PROPERTIES
-  POSITION_INDEPENDENT_CODE ON
-)
 
 # ------------------------------------------------------------------------------
 # C# wrapper (built via dotnet, triggered from CMake)
