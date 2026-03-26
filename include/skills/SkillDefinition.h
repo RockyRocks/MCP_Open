@@ -10,4 +10,6 @@ struct SkillDefinition {
     std::string defaultModel;
     nlohmann::json defaultParameters;
     std::vector<std::string> requiredVariables;
+    std::string systemPrompt;          // system-level instruction for the LLM
+    std::vector<std::string> rules;    // execution rules/preferences
 };

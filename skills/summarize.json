@@ -7,5 +7,11 @@
     "temperature": 0.3,
     "max_tokens": 1024
   },
-  "required_variables": ["input"]
+  "required_variables": ["input"],
+  "system_prompt": "You are an expert at extracting key information from text.",
+  "rules": [
+    "Keep each point to one sentence",
+    "Preserve factual accuracy — do not infer beyond the source text",
+    "Order points by importance"
+  ]
 }

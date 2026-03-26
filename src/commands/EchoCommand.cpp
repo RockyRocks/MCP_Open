@@ -12,6 +12,22 @@ public:
             return r;
         });
     }
+
+    ToolMetadata metadata() const override {
+        return {
+            "echo",
+            "Echo back the input message",
+            {
+                {"type", "object"},
+                {"properties", {
+                    {"message", {{"type", "string"}, {"description", "The message to echo back"}}}
+                }},
+                {"required", nlohmann::json::array({"message"})}
+            },
+            "",  // no default model
+            {}   // no default parameters
+        };
+    }
 };
 
 std::shared_ptr<ICommandStrategy> createEchoCommand() {

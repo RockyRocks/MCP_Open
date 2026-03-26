@@ -33,6 +33,13 @@ void SkillEngine::loadFromDirectory(const std::string& skillsDir) {
                 }
             }
 
+            skill.systemPrompt = data.value("system_prompt", "");
+            if (data.contains("rules") && data["rules"].is_array()) {
+                for (const auto& r : data["rules"]) {
+                    skill.rules.push_back(r.get<std::string>());
+                }
+            }
+
             if (!skill.name.empty() && !skill.promptTemplate.empty()) {
                 skills_[skill.name] = std::move(skill);
                 Logger::getInstance().log("Loaded skill: " + data["name"].get<std::string>());

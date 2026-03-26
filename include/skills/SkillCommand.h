@@ -9,6 +9,7 @@ public:
     SkillCommand(std::shared_ptr<SkillEngine> engine,
                  std::shared_ptr<ILLMProvider> provider);
     std::future<nlohmann::json> executeAsync(const nlohmann::json& request) override;
+    ToolMetadata metadata() const override;
 
 private:
     std::shared_ptr<SkillEngine> engine_;

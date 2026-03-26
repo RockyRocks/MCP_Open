@@ -52,3 +52,20 @@ std::future<nlohmann::json> CompositeCommand::executeAsync(const nlohmann::json&
         }
     });
 }
+
+ToolMetadata CompositeCommand::metadata() const {
+    return {
+        "remote",
+        "Forward request to a remote MCP server by capability",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"capability", {{"type", "string"}, {"description", "The capability to route to"}}},
+                {"request", {{"type", "object"}, {"description", "The request payload to forward"}}}
+            }},
+            {"required", nlohmann::json::array({"capability"})}
+        },
+        "",  // no default model
+        {}   // no default parameters
+    };
+}

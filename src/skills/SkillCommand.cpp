@@ -38,9 +38,27 @@ std::future<nlohmann::json> SkillCommand::executeAsync(const nlohmann::json& req
 
         LLMRequest llmReq;
         llmReq.model = model;
-        llmReq.messages = nlohmann::json::array({
-            {{"role", "user"}, {"content", prompt}}
-        });
+
+        // Build messages with optional system prompt + rules
+        nlohmann::json messages = nlohmann::json::array();
+
+        std::string systemContent;
+        if (!skill.systemPrompt.empty()) {
+            systemContent = skill.systemPrompt;
+        }
+        if (!skill.rules.empty()) {
+            if (!systemContent.empty()) systemContent += "\n\n";
+            systemContent += "Rules:\n";
+            for (size_t i = 0; i < skill.rules.size(); ++i) {
+                systemContent += std::to_string(i + 1) + ". " + skill.rules[i] + "\n";
+            }
+        }
+        if (!systemContent.empty()) {
+            messages.push_back({{"role", "system"}, {"content", systemContent}});
+        }
+        messages.push_back({{"role", "user"}, {"content", prompt}});
+
+        llmReq.messages = messages;
         llmReq.parameters = skill.defaultParameters;
 
         // Override with request-level parameters if provided
@@ -62,4 +80,23 @@ std::future<nlohmann::json> SkillCommand::executeAsync(const nlohmann::json& req
             {"output_tokens", resp.outputTokens}
         };
     });
+}
+
+ToolMetadata SkillCommand::metadata() const {
+    return {
+        "skill",
+        "Execute a skill prompt template with variables",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"skill", {{"type", "string"}, {"description", "Skill name to execute"}}},
+                {"variables", {{"type", "object"}, {"description", "Template variables to interpolate"}}},
+                {"model", {{"type", "string"}, {"description", "Override the skill's default model"}}},
+                {"parameters", {{"type", "object"}, {"description", "Override the skill's default parameters"}}}
+            }},
+            {"required", nlohmann::json::array({"skill"})}
+        },
+        "",  // model selection is per-skill, not per-command
+        {}
+    };
 }

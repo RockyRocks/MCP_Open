@@ -188,9 +188,20 @@ nlohmann::json StdioTransport::handleToolsCall(
     auto arguments = params.value("arguments", nlohmann::json::object());
 
     // Check if the tool/command exists
-    if (!registry_->hasCommand(toolName)) {
+    auto cmd = registry_->resolve(toolName);
+    if (!cmd) {
         return makeError(id, JSONRPC_INVALID_PARAMS,
                          "Unknown tool: " + toolName);
+    }
+
+    // Inject per-tool defaults if the caller didn't provide overrides
+    auto meta = cmd->metadata();
+    if (!meta.defaultModel.empty() && !arguments.contains("model")) {
+        arguments["model"] = meta.defaultModel;
+    }
+    if (!meta.defaultParameters.is_null() && !meta.defaultParameters.empty()
+        && !arguments.contains("parameters")) {
+        arguments["parameters"] = meta.defaultParameters;
     }
 
     // Translate MCP tools/call to internal command format
@@ -200,7 +211,6 @@ nlohmann::json StdioTransport::handleToolsCall(
     };
 
     try {
-        auto cmd = registry_->resolve(toolName);
         auto future = cmd->executeAsync(internalRequest);
         nlohmann::json result = future.get();
 
@@ -338,67 +348,12 @@ void StdioTransport::sendMessage(const nlohmann::json& msg) {
 
 std::vector<StdioTransport::ToolMeta> StdioTransport::buildToolList() const {
     std::vector<ToolMeta> tools;
-
-    auto commands = registry_->listCommands();
-    for (const auto& name : commands) {
-        ToolMeta meta;
-        meta.name = name;
-
-        if (name == "echo") {
-            meta.description = "Echo back the input message";
-            meta.inputSchema = {
-                {"type", "object"},
-                {"properties", {
-                    {"message", {{"type", "string"}, {"description", "The message to echo back"}}}
-                }},
-                {"required", nlohmann::json::array({"message"})}
-            };
-        } else if (name == "llm") {
-            meta.description = "Send a prompt to an LLM via LiteLLM proxy";
-            meta.inputSchema = {
-                {"type", "object"},
-                {"properties", {
-                    {"model", {{"type", "string"}, {"description", "Model name (e.g. claude-sonnet, gpt-4o)"}}},
-                    {"prompt", {{"type", "string"}, {"description", "Simple text prompt (convenience alternative to messages)"}}},
-                    {"messages", {{"type", "array"}, {"description", "Chat messages array [{role, content}]"},
-                        {"items", {{"type", "object"}}}}},
-                    {"parameters", {{"type", "object"}, {"description", "Model parameters (temperature, max_tokens, etc.)"}}}
-                }}
-            };
-        } else if (name == "skill") {
-            meta.description = "Execute a skill prompt template with variables";
-            meta.inputSchema = {
-                {"type", "object"},
-                {"properties", {
-                    {"skill", {{"type", "string"}, {"description", "Skill name to execute"}}},
-                    {"variables", {{"type", "object"}, {"description", "Template variables to interpolate"}}},
-                    {"model", {{"type", "string"}, {"description", "Override the skill's default model"}}},
-                    {"parameters", {{"type", "object"}, {"description", "Override the skill's default parameters"}}}
-                }},
-                {"required", nlohmann::json::array({"skill"})}
-            };
-        } else if (name == "remote") {
-            meta.description = "Forward request to a remote MCP server by capability";
-            meta.inputSchema = {
-                {"type", "object"},
-                {"properties", {
-                    {"capability", {{"type", "string"}, {"description", "The capability to route to"}}},
-                    {"request", {{"type", "object"}, {"description", "The request payload to forward"}}}
-                }},
-                {"required", nlohmann::json::array({"capability"})}
-            };
-        } else {
-            // Generic fallback for any dynamically registered commands
-            meta.description = "Execute the " + name + " command";
-            meta.inputSchema = {
-                {"type", "object"},
-                {"properties", nlohmann::json::object()},
-                {"additionalProperties", true}
-            };
-        }
-
-        tools.push_back(std::move(meta));
+    for (auto& meta : registry_->listToolMetadata()) {
+        tools.push_back({
+            std::move(meta.name),
+            std::move(meta.description),
+            std::move(meta.inputSchema)
+        });
     }
-
     return tools;
 }

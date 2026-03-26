@@ -29,3 +29,26 @@ std::vector<std::string> CommandRegistry::listCommands() const {
     }
     return names;
 }
+
+std::vector<ToolMetadata> CommandRegistry::listToolMetadata() const {
+    std::vector<ToolMetadata> result;
+    result.reserve(commands_.size());
+    for (const auto& [name, cmd] : commands_) {
+        ToolMetadata meta = cmd->metadata();
+        if (meta.name.empty()) {
+            meta.name = name;
+        }
+        if (meta.description.empty()) {
+            meta.description = "Execute the " + name + " command";
+        }
+        if (meta.inputSchema.is_null() || meta.inputSchema.empty()) {
+            meta.inputSchema = {
+                {"type", "object"},
+                {"properties", nlohmann::json::object()},
+                {"additionalProperties", true}
+            };
+        }
+        result.push_back(std::move(meta));
+    }
+    return result;
+}

@@ -38,3 +38,22 @@ std::future<nlohmann::json> LLMCommand::executeAsync(const nlohmann::json& reque
         };
     });
 }
+
+ToolMetadata LLMCommand::metadata() const {
+    return {
+        "llm",
+        "Send a prompt to an LLM via LiteLLM proxy",
+        {
+            {"type", "object"},
+            {"properties", {
+                {"model", {{"type", "string"}, {"description", "Model name (e.g. claude-sonnet, gpt-4o)"}}},
+                {"prompt", {{"type", "string"}, {"description", "Simple text prompt (convenience alternative to messages)"}}},
+                {"messages", {{"type", "array"}, {"description", "Chat messages array [{role, content}]"},
+                    {"items", {{"type", "object"}}}}},
+                {"parameters", {{"type", "object"}, {"description", "Model parameters (temperature, max_tokens, etc.)"}}}
+            }}
+        },
+        "",  // no default model — caller chooses
+        {}   // no default parameters
+    };
+}

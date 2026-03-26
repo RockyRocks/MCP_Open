@@ -9,6 +9,7 @@ public:
     CompositeCommand(std::shared_ptr<McpServerRegistry> registry,
                      std::shared_ptr<IHttpClient> httpClient);
     std::future<nlohmann::json> executeAsync(const nlohmann::json& request) override;
+    ToolMetadata metadata() const override;
 
 private:
     std::shared_ptr<McpServerRegistry> registry_;

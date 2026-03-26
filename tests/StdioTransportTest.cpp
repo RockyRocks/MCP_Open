@@ -205,3 +205,89 @@ TEST(StdioTransportTest, MethodBeforeInitializeReturnsError) {
     EXPECT_TRUE(resp.contains("error"));
     EXPECT_EQ(resp["error"]["code"], -32600);
 }
+
+TEST(StdioTransportTest, ToolsListUsesCommandMetadata) {
+    StdioTestFixture f;
+    auto responses = f.run({
+        makeRequest("initialize", 1),
+        makeNotification("notifications/initialized"),
+        makeRequest("tools/list", 2)
+    });
+
+    ASSERT_GE(responses.size(), 2u);
+    auto toolsResp = responses[1];
+    auto tools = toolsResp["result"]["tools"];
+
+    // Find the echo tool
+    bool foundEcho = false;
+    for (const auto& tool : tools) {
+        if (tool["name"] == "echo") {
+            foundEcho = true;
+            EXPECT_EQ(tool["description"], "Echo back the input message");
+            EXPECT_TRUE(tool["inputSchema"]["properties"].contains("message"));
+            break;
+        }
+    }
+    EXPECT_TRUE(foundEcho);
+}
+
+// Stub command that captures the request it receives, with a default model
+namespace {
+class CapturingCommand : public ICommandStrategy {
+public:
+    mutable nlohmann::json lastRequest;
+
+    std::future<nlohmann::json> executeAsync(const nlohmann::json& request) override {
+        lastRequest = request;
+        return std::async(std::launch::async, [request]() {
+            return nlohmann::json{{"status", "ok"}};
+        });
+    }
+
+    ToolMetadata metadata() const override {
+        return {
+            "capturing",
+            "A test command that captures requests",
+            {
+                {"type", "object"},
+                {"properties", {
+                    {"input", {{"type", "string"}}}
+                }}
+            },
+            "claude-opus",
+            {{"temperature", 0.1}}
+        };
+    }
+};
+} // anonymous namespace
+
+TEST(StdioTransportTest, DefaultModelInjectedInToolsCall) {
+    auto registry = std::make_shared<CommandRegistry>();
+    auto capCmd = std::make_shared<CapturingCommand>();
+    registry->registerCommand("capturing", capCmd);
+
+    auto skillEngine = std::make_shared<SkillEngine>();
+    auto mcpRegistry = std::make_shared<McpServerRegistry>();
+
+    nlohmann::json callParams = {
+        {"name", "capturing"},
+        {"arguments", {{"input", "hello"}}}
+    };
+
+    // Build request sequence: initialize + notify + tools/call
+    std::string inputStr;
+    inputStr += makeRequest("initialize", 1) + "\n";
+    inputStr += makeNotification("notifications/initialized") + "\n";
+    inputStr += makeRequest("tools/call", 2, callParams) + "\n";
+
+    std::istringstream input(inputStr);
+    std::ostringstream output;
+
+    StdioTransport transport(registry, skillEngine, mcpRegistry, input, output);
+    transport.run();
+
+    // Verify the captured request has the default model injected
+    ASSERT_FALSE(capCmd->lastRequest.is_null());
+    EXPECT_EQ(capCmd->lastRequest["payload"]["model"], "claude-opus");
+    EXPECT_EQ(capCmd->lastRequest["payload"]["parameters"]["temperature"], 0.1);
+}
