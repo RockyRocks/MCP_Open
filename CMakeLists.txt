@@ -160,9 +160,9 @@ if(UNIX)
   target_link_libraries(core PUBLIC Threads::Threads)
 endif()
 
-# macOS: httplib uses CoreFoundation for async DNS resolution with timeout
+# macOS: httplib uses CoreFoundation + CFNetwork for async DNS resolution
 if(APPLE)
-  target_link_libraries(core PUBLIC "-framework CoreFoundation")
+  target_link_libraries(core PUBLIC "-framework CoreFoundation" "-framework CFNetwork")
 endif()
 
 # ------------------------------------------------------------------------------
