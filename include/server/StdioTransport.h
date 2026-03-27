@@ -29,46 +29,46 @@ public:
         const std::string& serverVersion = "1.0.0"
     );
 
-    /// Blocking read loop. Returns when input stream reaches EOF or stop() is called.
-    void run();
+    /// Blocking read loop. Returns when input stream reaches EOF or Stop() is called.
+    void Run();
 
     /// Signal the transport to stop after the current message.
-    void stop();
+    void Stop();
 
 private:
     // JSON-RPC dispatch
-    nlohmann::json dispatch(const nlohmann::json& message);
+    nlohmann::json Dispatch(const nlohmann::json& message);
 
     // MCP method handlers
-    nlohmann::json handleInitialize(const nlohmann::json& params, const nlohmann::json& id);
-    nlohmann::json handleToolsList(const nlohmann::json& id);
-    nlohmann::json handleToolsCall(const nlohmann::json& params, const nlohmann::json& id);
-    nlohmann::json handlePromptsList(const nlohmann::json& id);
-    nlohmann::json handlePromptsGet(const nlohmann::json& params, const nlohmann::json& id);
+    nlohmann::json HandleInitialize(const nlohmann::json& params, const nlohmann::json& id);
+    nlohmann::json HandleToolsList(const nlohmann::json& id);
+    nlohmann::json HandleToolsCall(const nlohmann::json& params, const nlohmann::json& id);
+    nlohmann::json HandlePromptsList(const nlohmann::json& id);
+    nlohmann::json HandlePromptsGet(const nlohmann::json& params, const nlohmann::json& id);
 
     // JSON-RPC helpers
-    nlohmann::json makeResponse(const nlohmann::json& id, const nlohmann::json& result);
-    nlohmann::json makeError(const nlohmann::json& id, int code,
+    nlohmann::json MakeResponse(const nlohmann::json& id, const nlohmann::json& result);
+    nlohmann::json MakeError(const nlohmann::json& id, int code,
                              const std::string& message,
                              const nlohmann::json& data = nullptr);
-    void sendMessage(const nlohmann::json& msg);
+    void SendMessage(const nlohmann::json& msg);
 
     // Tool metadata
     struct ToolMeta {
-        std::string name;
-        std::string description;
-        nlohmann::json inputSchema;
+        std::string m_Name;
+        std::string m_Description;
+        nlohmann::json m_InputSchema;
     };
-    std::vector<ToolMeta> buildToolList() const;
+    std::vector<ToolMeta> BuildToolList() const;
 
-    std::shared_ptr<CommandRegistry> registry_;
-    std::shared_ptr<SkillEngine> skillEngine_;
-    std::shared_ptr<McpServerRegistry> mcpRegistry_;
-    std::istream& input_;
-    std::ostream& output_;
-    std::string serverName_;
-    std::string serverVersion_;
-    bool initialized_ = false;
-    std::atomic<bool> running_{false};
-    std::mutex writeMutex_;
+    std::shared_ptr<CommandRegistry> m_Registry;
+    std::shared_ptr<SkillEngine> m_SkillEngine;
+    std::shared_ptr<McpServerRegistry> m_McpRegistry;
+    std::istream& m_Input;
+    std::ostream& m_Output;
+    std::string m_ServerName;
+    std::string m_ServerVersion;
+    bool m_Initialized = false;
+    std::atomic<bool> m_Running{false};
+    std::mutex m_WriteMutex;
 };

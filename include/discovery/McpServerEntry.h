@@ -3,9 +3,9 @@
 #include <vector>
 
 struct McpServerEntry {
-    std::string name;
-    std::string url;
-    std::vector<std::string> capabilities;
-    int priority = 1;
-    int timeoutSeconds = 30;
+    std::string m_Name;
+    std::string m_Url;
+    std::vector<std::string> m_Capabilities;
+    int m_Priority = 1;
+    int m_TimeoutSeconds = 30;
 };

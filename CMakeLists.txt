@@ -213,14 +213,14 @@ endif()
 enable_testing()
 
 set(TEST_SOURCES
-    tests/ProtocolHandlerTest.cpp
-    tests/CommandRegistryTest.cpp
-    tests/InputSanitizerTest.cpp
-    tests/RateLimiterTest.cpp
-    tests/ConfigTest.cpp
-    tests/SkillEngineTest.cpp
-    tests/McpServerRegistryTest.cpp
-    tests/StdioTransportTest.cpp
+    tests/ProtocolHandler_test.cpp
+    tests/CommandRegistry_test.cpp
+    tests/InputSanitizer_test.cpp
+    tests/RateLimiter_test.cpp
+    tests/Config_test.cpp
+    tests/SkillEngine_test.cpp
+    tests/McpServerRegistry_test.cpp
+    tests/StdioTransport_test.cpp
 )
 
 if(TEST_FRAMEWORK STREQUAL "GTest")

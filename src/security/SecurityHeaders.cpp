@@ -1,6 +1,6 @@
-#include "security/SecurityHeaders.h"
+#include <security/SecurityHeaders.h>
 
-std::unordered_map<std::string, std::string> SecurityHeaders::getDefaults() {
+std::unordered_map<std::string, std::string> SecurityHeaders::GetDefaults() {
     return {
         {"X-Content-Type-Options", "nosniff"},
         {"X-Frame-Options", "DENY"},

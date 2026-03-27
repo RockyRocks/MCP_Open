@@ -4,10 +4,10 @@
 
 class InputSanitizer {
 public:
-    static std::string sanitizeString(const std::string& input, size_t maxLength = 10000);
-    static bool validateJsonDepth(const nlohmann::json& j, int maxDepth = 32);
-    static bool validatePayloadSize(const std::string& body, size_t maxBytes);
+    static std::string SanitizeString(const std::string& input, size_t maxLength = 10000);
+    static bool ValidateJsonDepth(const nlohmann::json& j, int maxDepth = 32);
+    static bool ValidatePayloadSize(const std::string& body, size_t maxBytes);
 
 private:
-    static bool checkDepth(const nlohmann::json& j, int currentDepth, int maxDepth);
+    static bool CheckDepth(const nlohmann::json& j, int currentDepth, int maxDepth);
 };

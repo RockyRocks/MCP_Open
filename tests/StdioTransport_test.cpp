@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
-#include "server/StdioTransport.h"
-#include "commands/CommandRegistry.h"
-#include "commands/EchoCommand.h"
-#include "skills/SkillEngine.h"
-#include "discovery/McpServerRegistry.h"
+#include <server/StdioTransport.h>
+#include <commands/CommandRegistry.h>
+#include <commands/EchoCommand.h>
+#include <skills/SkillEngine.h>
+#include <discovery/McpServerRegistry.h>
 
 #include <sstream>
 
@@ -17,7 +17,7 @@ struct StdioTestFixture {
 
     StdioTestFixture() {
         registry = std::make_shared<CommandRegistry>();
-        registry->registerCommand("echo", createEchoCommand());
+        registry->RegisterCommand("echo", CreateEchoCommand());
         skillEngine = std::make_shared<SkillEngine>();
         mcpRegistry = std::make_shared<McpServerRegistry>();
     }
@@ -34,7 +34,7 @@ struct StdioTestFixture {
 
         StdioTransport transport(registry, skillEngine, mcpRegistry,
                                  input, output);
-        transport.run();
+        transport.Run();
 
         // Parse output lines
         std::vector<nlohmann::json> responses;
@@ -237,14 +237,14 @@ class CapturingCommand : public ICommandStrategy {
 public:
     mutable nlohmann::json lastRequest;
 
-    std::future<nlohmann::json> executeAsync(const nlohmann::json& request) override {
+    std::future<nlohmann::json> ExecuteAsync(const nlohmann::json& request) override {
         lastRequest = request;
         return std::async(std::launch::async, [request]() {
             return nlohmann::json{{"status", "ok"}};
         });
     }
 
-    ToolMetadata metadata() const override {
+    ToolMetadata GetMetadata() const override {
         return {
             "capturing",
             "A test command that captures requests",
@@ -264,7 +264,7 @@ public:
 TEST(StdioTransportTest, DefaultModelInjectedInToolsCall) {
     auto registry = std::make_shared<CommandRegistry>();
     auto capCmd = std::make_shared<CapturingCommand>();
-    registry->registerCommand("capturing", capCmd);
+    registry->RegisterCommand("capturing", capCmd);
 
     auto skillEngine = std::make_shared<SkillEngine>();
     auto mcpRegistry = std::make_shared<McpServerRegistry>();
@@ -284,7 +284,7 @@ TEST(StdioTransportTest, DefaultModelInjectedInToolsCall) {
     std::ostringstream output;
 
     StdioTransport transport(registry, skillEngine, mcpRegistry, input, output);
-    transport.run();
+    transport.Run();
 
     // Verify the captured request has the default model injected
     ASSERT_FALSE(capCmd->lastRequest.is_null());

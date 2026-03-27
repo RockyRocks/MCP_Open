@@ -1,18 +1,18 @@
-#include "server/HttplibServer.h"
-#include "security/SecurityHeaders.h"
+#include <server/HttplibServer.h>
+#include <security/SecurityHeaders.h>
 #include <iostream>
 
 HttplibServer::HttplibServer() = default;
 
-void HttplibServer::addRoute(const std::string& method, const std::string& path,
+void HttplibServer::AddRoute(const std::string& method, const std::string& path,
                                RouteHandler handler) {
-    routes_.emplace_back(method, path, std::move(handler));
+    m_Routes.emplace_back(method, path, std::move(handler));
 }
 
-void HttplibServer::listen(const std::string& host, int port) {
-    auto secHeaders = SecurityHeaders::getDefaults();
+void HttplibServer::Listen(const std::string& host, int port) {
+    auto secHeaders = SecurityHeaders::GetDefaults();
 
-    for (auto& [method, path, handler] : routes_) {
+    for (auto& [method, path, handler] : m_Routes) {
         auto routeHandler = [handler, secHeaders](const httplib::Request& req,
                                                     httplib::Response& res) {
             // Apply security headers
@@ -29,16 +29,16 @@ void HttplibServer::listen(const std::string& host, int port) {
         };
 
         if (method == "POST") {
-            svr_.Post(path, routeHandler);
+            m_Server.Post(path, routeHandler);
         } else if (method == "GET") {
-            svr_.Get(path, routeHandler);
+            m_Server.Get(path, routeHandler);
         }
     }
 
     std::cout << "HttplibServer listening on " << host << ":" << port << std::endl;
-    svr_.listen(host, port);
+    m_Server.listen(host, port);
 }
 
-void HttplibServer::stop() {
-    svr_.stop();
+void HttplibServer::Stop() {
+    m_Server.stop();
 }

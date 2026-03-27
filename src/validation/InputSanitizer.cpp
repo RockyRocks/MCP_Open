@@ -1,7 +1,7 @@
-#include "validation/InputSanitizer.h"
+#include <validation/InputSanitizer.h>
 #include <algorithm>
 
-std::string InputSanitizer::sanitizeString(const std::string& input, size_t maxLength) {
+std::string InputSanitizer::SanitizeString(const std::string& input, size_t maxLength) {
     std::string result;
     result.reserve(std::min(input.size(), maxLength));
 
@@ -15,24 +15,24 @@ std::string InputSanitizer::sanitizeString(const std::string& input, size_t maxL
     return result;
 }
 
-bool InputSanitizer::validateJsonDepth(const nlohmann::json& j, int maxDepth) {
-    return checkDepth(j, 0, maxDepth);
+bool InputSanitizer::ValidateJsonDepth(const nlohmann::json& j, int maxDepth) {
+    return CheckDepth(j, 0, maxDepth);
 }
 
-bool InputSanitizer::validatePayloadSize(const std::string& body, size_t maxBytes) {
+bool InputSanitizer::ValidatePayloadSize(const std::string& body, size_t maxBytes) {
     return body.size() <= maxBytes;
 }
 
-bool InputSanitizer::checkDepth(const nlohmann::json& j, int currentDepth, int maxDepth) {
+bool InputSanitizer::CheckDepth(const nlohmann::json& j, int currentDepth, int maxDepth) {
     if (currentDepth > maxDepth) return false;
 
     if (j.is_object()) {
         for (const auto& [key, val] : j.items()) {
-            if (!checkDepth(val, currentDepth + 1, maxDepth)) return false;
+            if (!CheckDepth(val, currentDepth + 1, maxDepth)) return false;
         }
     } else if (j.is_array()) {
         for (const auto& elem : j) {
-            if (!checkDepth(elem, currentDepth + 1, maxDepth)) return false;
+            if (!CheckDepth(elem, currentDepth + 1, maxDepth)) return false;
         }
     }
     return true;

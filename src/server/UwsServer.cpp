@@ -1,6 +1,6 @@
-#include "server/UwsServer.h"
-#include "security/SecurityHeaders.h"
-#include "core/CompilerDefinitions.h"
+#include <server/UwsServer.h>
+#include <security/SecurityHeaders.h>
+#include <core/CompilerDefinitions.h>
 
 #ifdef USE_UWS
 #include <App.h>
@@ -10,17 +10,17 @@
 
 UwsServer::UwsServer() = default;
 
-void UwsServer::addRoute(const std::string& method, const std::string& path,
+void UwsServer::AddRoute(const std::string& method, const std::string& path,
                            RouteHandler handler) {
-    routes_.emplace_back(method, path, std::move(handler));
+    m_Routes.emplace_back(method, path, std::move(handler));
 }
 
-void UwsServer::listen(const std::string& host, int port) {
+void UwsServer::Listen(const std::string& host, int port) {
 #ifdef USE_UWS
-    auto secHeaders = SecurityHeaders::getDefaults();
+    auto secHeaders = SecurityHeaders::GetDefaults();
     auto app = uWS::App();
 
-    for (auto& [method, path, handler] : routes_) {
+    for (auto& [method, path, handler] : m_Routes) {
         if (method == "POST") {
             app.post(path, [handler, secHeaders](auto* res, MAYBE_UNUSED auto* req) {
                 res->onData([handler, secHeaders, res](std::string_view data, bool last) {
@@ -62,7 +62,7 @@ void UwsServer::listen(const std::string& host, int port) {
         }
     }
 
-    running_ = true;
+    m_Running = true;
     app.listen(host, port, [port](auto* token) {
         if (token) std::cout << "UwsServer listening on port " << port << std::endl;
     }).run();
@@ -73,6 +73,6 @@ void UwsServer::listen(const std::string& host, int port) {
 #endif
 }
 
-void UwsServer::stop() {
-    running_ = false;
+void UwsServer::Stop() {
+    m_Running = false;
 }

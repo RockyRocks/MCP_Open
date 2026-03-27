@@ -1,9 +1,9 @@
 #pragma once
-#include "core/IRequestHandler.h"
-#include "commands/CommandRegistry.h"
-#include "validation/InputSanitizer.h"
-#include "security/RateLimiter.h"
-#include "security/ApiKeyValidator.h"
+#include <core/IRequestHandler.h>
+#include <commands/CommandRegistry.h>
+#include <validation/InputSanitizer.h>
+#include <security/RateLimiter.h>
+#include <security/ApiKeyValidator.h>
 #include <nlohmann/json.hpp>
 #include <memory>
 #include <string>
@@ -16,18 +16,18 @@ public:
                     size_t maxBodySize = 1048576);
 
     // IRequestHandler interface
-    nlohmann::json handle(const nlohmann::json& request) override;
+    nlohmann::json Handle(const nlohmann::json& request) override;
 
     // Full request handling with security checks
-    std::string handleRequest(const std::string& body, const std::string& clientIp,
+    std::string HandleRequest(const std::string& body, const std::string& clientIp,
                                const std::string& authHeader = "");
 
-    bool validateRequest(const nlohmann::json& req);
-    std::string createResponse(const nlohmann::json& data);
+    bool ValidateRequest(const nlohmann::json& req);
+    std::string CreateResponse(const nlohmann::json& data);
 
 private:
-    std::shared_ptr<CommandRegistry> registry_;
-    std::shared_ptr<RateLimiter> rateLimiter_;
-    std::shared_ptr<ApiKeyValidator> apiKeyValidator_;
-    size_t maxBodySize_;
+    std::shared_ptr<CommandRegistry> m_Registry;
+    std::shared_ptr<RateLimiter> m_RateLimiter;
+    std::shared_ptr<ApiKeyValidator> m_ApiKeyValidator;
+    size_t m_MaxBodySize;
 };

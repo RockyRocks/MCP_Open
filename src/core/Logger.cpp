@@ -1,25 +1,25 @@
-#include "core/Logger.h"
+#include <core/Logger.h>
 #include <iostream>
 
-Logger& Logger::getInstance() {
+Logger& Logger::GetInstance() {
     static Logger lg;
     return lg;
 }
 
-void Logger::log(const std::string& msg) {
-    std::lock_guard<std::mutex> lock(mtx_);
-    if (!suppressStdout_) {
+void Logger::Log(const std::string& msg) {
+    std::lock_guard<std::mutex> lock(m_Mtx);
+    if (!m_SuppressStdout) {
         std::cout << "[LOG] " << msg << std::endl;
     }
-    if (observer) observer(msg);
+    if (m_Observer) m_Observer(msg);
 }
 
-void Logger::setSuppressStdout(bool suppress) {
-    std::lock_guard<std::mutex> lock(mtx_);
-    suppressStdout_ = suppress;
+void Logger::SetSuppressStdout(bool suppress) {
+    std::lock_guard<std::mutex> lock(m_Mtx);
+    m_SuppressStdout = suppress;
 }
 
-void Logger::setObserver(std::function<void(const std::string&)> obs) {
-    std::lock_guard<std::mutex> lock(mtx_);
-    observer = std::move(obs);
+void Logger::SetObserver(std::function<void(const std::string&)> obs) {
+    std::lock_guard<std::mutex> lock(m_Mtx);
+    m_Observer = std::move(obs);
 }

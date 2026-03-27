@@ -1,8 +1,8 @@
-#include "server/StdioTransport.h"
-#include "commands/CommandRegistry.h"
-#include "skills/SkillEngine.h"
-#include "discovery/McpServerRegistry.h"
-#include "core/Logger.h"
+#include <server/StdioTransport.h>
+#include <commands/CommandRegistry.h>
+#include <skills/SkillEngine.h>
+#include <discovery/McpServerRegistry.h>
+#include <core/Logger.h>
 
 #include <sstream>
 
@@ -28,39 +28,39 @@ StdioTransport::StdioTransport(
     std::ostream& output,
     const std::string& serverName,
     const std::string& serverVersion)
-    : registry_(std::move(registry))
-    , skillEngine_(std::move(skillEngine))
-    , mcpRegistry_(std::move(mcpRegistry))
-    , input_(input)
-    , output_(output)
-    , serverName_(serverName)
-    , serverVersion_(serverVersion)
+    : m_Registry(std::move(registry))
+    , m_SkillEngine(std::move(skillEngine))
+    , m_McpRegistry(std::move(mcpRegistry))
+    , m_Input(input)
+    , m_Output(output)
+    , m_ServerName(serverName)
+    , m_ServerVersion(serverVersion)
 {
 }
 
-void StdioTransport::run() {
+void StdioTransport::Run() {
 #ifdef _WIN32
     // Set binary mode on stdin/stdout to avoid \r\n corruption
-    if (&input_ == &std::cin) {
+    if (&m_Input == &std::cin) {
         _setmode(_fileno(stdin), _O_BINARY);
     }
-    if (&output_ == &std::cout) {
+    if (&m_Output == &std::cout) {
         _setmode(_fileno(stdout), _O_BINARY);
     }
 #endif
 
     // Redirect logger to stderr when using real stdin/stdout
-    if (&output_ == &std::cout) {
-        Logger::getInstance().setSuppressStdout(true);
-        Logger::getInstance().setObserver([](const std::string& msg) {
+    if (&m_Output == &std::cout) {
+        Logger::GetInstance().SetSuppressStdout(true);
+        Logger::GetInstance().SetObserver([](const std::string& msg) {
             std::cerr << "[LOG] " << msg << std::endl;
         });
     }
 
-    running_ = true;
+    m_Running = true;
     std::string line;
 
-    while (running_ && std::getline(input_, line)) {
+    while (m_Running && std::getline(m_Input, line)) {
         if (line.empty()) {
             continue;
         }
@@ -74,7 +74,7 @@ void StdioTransport::run() {
         try {
             message = nlohmann::json::parse(line);
         } catch (const nlohmann::json::parse_error&) {
-            sendMessage(makeError(nullptr, JSONRPC_PARSE_ERROR, "Parse error"));
+            SendMessage(MakeError(nullptr, JSONRPC_PARSE_ERROR, "Parse error"));
             continue;
         }
 
@@ -82,34 +82,34 @@ void StdioTransport::run() {
         if (!message.is_object() || !message.contains("jsonrpc") ||
             message["jsonrpc"] != "2.0" || !message.contains("method")) {
             auto id = message.contains("id") ? message["id"] : nullptr;
-            sendMessage(makeError(id, JSONRPC_INVALID_REQUEST, "Invalid JSON-RPC 2.0 request"));
+            SendMessage(MakeError(id, JSONRPC_INVALID_REQUEST, "Invalid JSON-RPC 2.0 request"));
             continue;
         }
 
         // Notifications have no "id" field — process but don't respond
         bool isNotification = !message.contains("id");
 
-        nlohmann::json response = dispatch(message);
+        nlohmann::json response = Dispatch(message);
 
         if (!isNotification && !response.is_null()) {
-            sendMessage(response);
+            SendMessage(response);
         }
     }
 
-    running_ = false;
+    m_Running = false;
 }
 
-void StdioTransport::stop() {
-    running_ = false;
+void StdioTransport::Stop() {
+    m_Running = false;
 }
 
-nlohmann::json StdioTransport::dispatch(const nlohmann::json& message) {
+nlohmann::json StdioTransport::Dispatch(const nlohmann::json& message) {
     std::string method = message["method"].get<std::string>();
     auto id = message.contains("id") ? message["id"] : nullptr;
     auto params = message.value("params", nlohmann::json::object());
 
     if (method == "initialize") {
-        return handleInitialize(params, id);
+        return HandleInitialize(params, id);
     }
     if (method == "notifications/initialized") {
         // Notification — no response
@@ -117,24 +117,24 @@ nlohmann::json StdioTransport::dispatch(const nlohmann::json& message) {
     }
 
     // All methods below require initialization
-    if (!initialized_) {
-        return makeError(id, JSONRPC_INVALID_REQUEST, "Server not initialized");
+    if (!m_Initialized) {
+        return MakeError(id, JSONRPC_INVALID_REQUEST, "Server not initialized");
     }
 
     if (method == "tools/list") {
-        return handleToolsList(id);
+        return HandleToolsList(id);
     }
     if (method == "tools/call") {
-        return handleToolsCall(params, id);
+        return HandleToolsCall(params, id);
     }
     if (method == "prompts/list") {
-        return handlePromptsList(id);
+        return HandlePromptsList(id);
     }
     if (method == "prompts/get") {
-        return handlePromptsGet(params, id);
+        return HandlePromptsGet(params, id);
     }
 
-    return makeError(id, JSONRPC_METHOD_NOT_FOUND,
+    return MakeError(id, JSONRPC_METHOD_NOT_FOUND,
                      "Method not found: " + method);
 }
 
@@ -142,9 +142,9 @@ nlohmann::json StdioTransport::dispatch(const nlohmann::json& message) {
 // MCP method handlers
 // ---------------------------------------------------------------------------
 
-nlohmann::json StdioTransport::handleInitialize(
+nlohmann::json StdioTransport::HandleInitialize(
     const nlohmann::json& /*params*/, const nlohmann::json& id) {
-    initialized_ = true;
+    m_Initialized = true;
 
     nlohmann::json result = {
         {"protocolVersion", MCP_PROTOCOL_VERSION},
@@ -153,34 +153,34 @@ nlohmann::json StdioTransport::handleInitialize(
             {"prompts", nlohmann::json::object()}
         }},
         {"serverInfo", {
-            {"name", serverName_},
-            {"version", serverVersion_}
+            {"name", m_ServerName},
+            {"version", m_ServerVersion}
         }}
     };
 
-    return makeResponse(id, result);
+    return MakeResponse(id, result);
 }
 
-nlohmann::json StdioTransport::handleToolsList(const nlohmann::json& id) {
-    auto tools = buildToolList();
+nlohmann::json StdioTransport::HandleToolsList(const nlohmann::json& id) {
+    auto tools = BuildToolList();
     nlohmann::json toolsArray = nlohmann::json::array();
 
     for (const auto& tool : tools) {
         toolsArray.push_back({
-            {"name", tool.name},
-            {"description", tool.description},
-            {"inputSchema", tool.inputSchema}
+            {"name", tool.m_Name},
+            {"description", tool.m_Description},
+            {"inputSchema", tool.m_InputSchema}
         });
     }
 
-    return makeResponse(id, {{"tools", toolsArray}});
+    return MakeResponse(id, {{"tools", toolsArray}});
 }
 
-nlohmann::json StdioTransport::handleToolsCall(
+nlohmann::json StdioTransport::HandleToolsCall(
     const nlohmann::json& params, const nlohmann::json& id) {
 
     if (!params.contains("name") || !params["name"].is_string()) {
-        return makeError(id, JSONRPC_INVALID_PARAMS,
+        return MakeError(id, JSONRPC_INVALID_PARAMS,
                          "Missing required parameter: name");
     }
 
@@ -188,20 +188,20 @@ nlohmann::json StdioTransport::handleToolsCall(
     auto arguments = params.value("arguments", nlohmann::json::object());
 
     // Check if the tool/command exists
-    auto cmd = registry_->resolve(toolName);
+    auto cmd = m_Registry->Resolve(toolName);
     if (!cmd) {
-        return makeError(id, JSONRPC_INVALID_PARAMS,
+        return MakeError(id, JSONRPC_INVALID_PARAMS,
                          "Unknown tool: " + toolName);
     }
 
     // Inject per-tool defaults if the caller didn't provide overrides
-    auto meta = cmd->metadata();
-    if (!meta.defaultModel.empty() && !arguments.contains("model")) {
-        arguments["model"] = meta.defaultModel;
+    auto meta = cmd->GetMetadata();
+    if (!meta.m_DefaultModel.empty() && !arguments.contains("model")) {
+        arguments["model"] = meta.m_DefaultModel;
     }
-    if (!meta.defaultParameters.is_null() && !meta.defaultParameters.empty()
+    if (!meta.m_DefaultParameters.is_null() && !meta.m_DefaultParameters.empty()
         && !arguments.contains("parameters")) {
-        arguments["parameters"] = meta.defaultParameters;
+        arguments["parameters"] = meta.m_DefaultParameters;
     }
 
     // Translate MCP tools/call to internal command format
@@ -211,7 +211,7 @@ nlohmann::json StdioTransport::handleToolsCall(
     };
 
     try {
-        auto future = cmd->executeAsync(internalRequest);
+        auto future = cmd->ExecuteAsync(internalRequest);
         nlohmann::json result = future.get();
 
         // Check for command-level errors
@@ -225,18 +225,18 @@ nlohmann::json StdioTransport::handleToolsCall(
             {"isError", isError}
         };
 
-        return makeResponse(id, mcpResult);
+        return MakeResponse(id, mcpResult);
 
     } catch (const std::exception& e) {
-        return makeError(id, JSONRPC_INTERNAL_ERROR, e.what());
+        return MakeError(id, JSONRPC_INTERNAL_ERROR, e.what());
     }
 }
 
-nlohmann::json StdioTransport::handlePromptsList(const nlohmann::json& id) {
+nlohmann::json StdioTransport::HandlePromptsList(const nlohmann::json& id) {
     nlohmann::json promptsArray = nlohmann::json::array();
 
-    if (skillEngine_) {
-        auto skillsJson = skillEngine_->listSkillsJson();
+    if (m_SkillEngine) {
+        auto skillsJson = m_SkillEngine->ListSkillsJson();
         for (const auto& skill : skillsJson) {
             nlohmann::json prompt = {
                 {"name", skill.value("name", "")},
@@ -259,33 +259,33 @@ nlohmann::json StdioTransport::handlePromptsList(const nlohmann::json& id) {
         }
     }
 
-    return makeResponse(id, {{"prompts", promptsArray}});
+    return MakeResponse(id, {{"prompts", promptsArray}});
 }
 
-nlohmann::json StdioTransport::handlePromptsGet(
+nlohmann::json StdioTransport::HandlePromptsGet(
     const nlohmann::json& params, const nlohmann::json& id) {
 
     if (!params.contains("name") || !params["name"].is_string()) {
-        return makeError(id, JSONRPC_INVALID_PARAMS,
+        return MakeError(id, JSONRPC_INVALID_PARAMS,
                          "Missing required parameter: name");
     }
 
     std::string promptName = params["name"].get<std::string>();
     auto arguments = params.value("arguments", nlohmann::json::object());
 
-    if (!skillEngine_) {
-        return makeError(id, JSONRPC_INVALID_PARAMS,
+    if (!m_SkillEngine) {
+        return MakeError(id, JSONRPC_INVALID_PARAMS,
                          "No skill engine available");
     }
 
-    auto skill = skillEngine_->resolve(promptName);
+    auto skill = m_SkillEngine->Resolve(promptName);
     if (!skill) {
-        return makeError(id, JSONRPC_INVALID_PARAMS,
+        return MakeError(id, JSONRPC_INVALID_PARAMS,
                          "Unknown prompt: " + promptName);
     }
 
     try {
-        std::string rendered = skillEngine_->renderPrompt(*skill, arguments);
+        std::string rendered = m_SkillEngine->RenderPrompt(*skill, arguments);
 
         nlohmann::json result = {
             {"messages", nlohmann::json::array({
@@ -299,10 +299,10 @@ nlohmann::json StdioTransport::handlePromptsGet(
             })}
         };
 
-        return makeResponse(id, result);
+        return MakeResponse(id, result);
 
     } catch (const std::exception& e) {
-        return makeError(id, JSONRPC_INVALID_PARAMS, e.what());
+        return MakeError(id, JSONRPC_INVALID_PARAMS, e.what());
     }
 }
 
@@ -310,7 +310,7 @@ nlohmann::json StdioTransport::handlePromptsGet(
 // JSON-RPC helpers
 // ---------------------------------------------------------------------------
 
-nlohmann::json StdioTransport::makeResponse(
+nlohmann::json StdioTransport::MakeResponse(
     const nlohmann::json& id, const nlohmann::json& result) {
     return {
         {"jsonrpc", "2.0"},
@@ -319,7 +319,7 @@ nlohmann::json StdioTransport::makeResponse(
     };
 }
 
-nlohmann::json StdioTransport::makeError(
+nlohmann::json StdioTransport::MakeError(
     const nlohmann::json& id, int code,
     const std::string& message, const nlohmann::json& data) {
     nlohmann::json error = {
@@ -336,23 +336,23 @@ nlohmann::json StdioTransport::makeError(
     };
 }
 
-void StdioTransport::sendMessage(const nlohmann::json& msg) {
-    std::lock_guard<std::mutex> lock(writeMutex_);
-    output_ << msg.dump() << "\n";
-    output_.flush();
+void StdioTransport::SendMessage(const nlohmann::json& msg) {
+    std::lock_guard<std::mutex> lock(m_WriteMutex);
+    m_Output << msg.dump() << "\n";
+    m_Output.flush();
 }
 
 // ---------------------------------------------------------------------------
 // Tool metadata
 // ---------------------------------------------------------------------------
 
-std::vector<StdioTransport::ToolMeta> StdioTransport::buildToolList() const {
+std::vector<StdioTransport::ToolMeta> StdioTransport::BuildToolList() const {
     std::vector<ToolMeta> tools;
-    for (auto& meta : registry_->listToolMetadata()) {
+    for (auto& meta : m_Registry->ListToolMetadata()) {
         tools.push_back({
-            std::move(meta.name),
-            std::move(meta.description),
-            std::move(meta.inputSchema)
+            std::move(meta.m_Name),
+            std::move(meta.m_Description),
+            std::move(meta.m_InputSchema)
         });
     }
     return tools;

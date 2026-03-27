@@ -4,10 +4,10 @@
 class ApiKeyValidator {
 public:
     explicit ApiKeyValidator(const std::string& expectedKey, bool enabled = true);
-    bool validate(const std::string& authorizationHeader) const;
-    bool isEnabled() const;
+    bool Validate(const std::string& authorizationHeader) const;
+    bool IsEnabled() const;
 
 private:
-    std::string expectedKey_;
-    bool enabled_;
+    std::string m_ExpectedKey;
+    bool m_Enabled;
 };

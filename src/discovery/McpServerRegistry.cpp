@@ -1,21 +1,21 @@
-#include "discovery/McpServerRegistry.h"
-#include "core/Logger.h"
+#include <discovery/McpServerRegistry.h>
+#include <core/Logger.h>
 #include <fstream>
 #include <algorithm>
 #include <regex>
 #include <stdexcept>
 
-bool McpServerRegistry::isValidUrl(const std::string& url) {
+bool McpServerRegistry::IsValidUrl(const std::string& url) {
     std::regex urlRegex(R"(^https?://[a-zA-Z0-9.\-]+(:\d+)?(/.*)?$)");
     return std::regex_match(url, urlRegex);
 }
 
-McpServerRegistry McpServerRegistry::loadFromFile(const std::string& path) {
+McpServerRegistry McpServerRegistry::LoadFromFile(const std::string& path) {
     McpServerRegistry registry;
 
     std::ifstream file(path);
     if (!file.is_open()) {
-        Logger::getInstance().log("MCP servers config not found: " + path + " (using empty registry)");
+        Logger::GetInstance().Log("MCP servers config not found: " + path + " (using empty registry)");
         return registry;
     }
 
@@ -26,44 +26,44 @@ McpServerRegistry McpServerRegistry::loadFromFile(const std::string& path) {
 
     for (const auto& s : data["servers"]) {
         McpServerEntry entry;
-        entry.name = s.value("name", "");
-        entry.url = s.value("url", "");
-        entry.priority = s.value("priority", 1);
-        entry.timeoutSeconds = s.value("timeout_seconds", 30);
+        entry.m_Name = s.value("name", "");
+        entry.m_Url = s.value("url", "");
+        entry.m_Priority = s.value("priority", 1);
+        entry.m_TimeoutSeconds = s.value("timeout_seconds", 30);
 
-        if (!isValidUrl(entry.url)) {
-            Logger::getInstance().log("Skipping server with invalid URL: " + entry.url);
+        if (!IsValidUrl(entry.m_Url)) {
+            Logger::GetInstance().Log("Skipping server with invalid URL: " + entry.m_Url);
             continue;
         }
 
         if (s.contains("capabilities") && s["capabilities"].is_array()) {
             for (const auto& cap : s["capabilities"]) {
-                entry.capabilities.push_back(cap.get<std::string>());
+                entry.m_Capabilities.push_back(cap.get<std::string>());
             }
         }
 
-        registry.servers_.push_back(std::move(entry));
+        registry.m_Servers.push_back(std::move(entry));
     }
 
-    Logger::getInstance().log("Loaded " + std::to_string(registry.servers_.size()) + " MCP servers");
+    Logger::GetInstance().Log("Loaded " + std::to_string(registry.m_Servers.size()) + " MCP servers");
     return registry;
 }
 
-void McpServerRegistry::addServer(const McpServerEntry& entry) {
-    if (!isValidUrl(entry.url)) {
-        throw std::invalid_argument("Invalid server URL: " + entry.url);
+void McpServerRegistry::AddServer(const McpServerEntry& entry) {
+    if (!IsValidUrl(entry.m_Url)) {
+        throw std::invalid_argument("Invalid server URL: " + entry.m_Url);
     }
-    servers_.push_back(entry);
+    m_Servers.push_back(entry);
 }
 
-std::vector<McpServerEntry> McpServerRegistry::allServers() const {
-    return servers_;
+std::vector<McpServerEntry> McpServerRegistry::GetAllServers() const {
+    return m_Servers;
 }
 
-std::vector<McpServerEntry> McpServerRegistry::serversForCapability(const std::string& capability) const {
+std::vector<McpServerEntry> McpServerRegistry::GetServersForCapability(const std::string& capability) const {
     std::vector<McpServerEntry> result;
-    for (const auto& server : servers_) {
-        for (const auto& cap : server.capabilities) {
+    for (const auto& server : m_Servers) {
+        for (const auto& cap : server.m_Capabilities) {
             if (cap == capability) {
                 result.push_back(server);
                 break;
@@ -72,34 +72,34 @@ std::vector<McpServerEntry> McpServerRegistry::serversForCapability(const std::s
     }
     std::sort(result.begin(), result.end(),
               [](const McpServerEntry& a, const McpServerEntry& b) {
-                  return a.priority < b.priority;
+                  return a.m_Priority < b.m_Priority;
               });
     return result;
 }
 
-std::optional<McpServerEntry> McpServerRegistry::bestServerFor(const std::string& capability) const {
-    auto servers = serversForCapability(capability);
+std::optional<McpServerEntry> McpServerRegistry::GetBestServerFor(const std::string& capability) const {
+    auto servers = GetServersForCapability(capability);
     if (servers.empty()) return std::nullopt;
     return servers.front();
 }
 
-bool McpServerRegistry::healthCheck(const McpServerEntry& server, IHttpClient& client) const {
+bool McpServerRegistry::HealthCheck(const McpServerEntry& server, IHttpClient& client) const {
     try {
-        auto resp = client.get(server.url + "/health", {}, 5);
-        return resp.statusCode == 200;
+        auto resp = client.Get(server.m_Url + "/health", {}, 5);
+        return resp.m_StatusCode == 200;
     } catch (...) {
         return false;
     }
 }
 
-nlohmann::json McpServerRegistry::toJson() const {
+nlohmann::json McpServerRegistry::ToJson() const {
     nlohmann::json arr = nlohmann::json::array();
-    for (const auto& s : servers_) {
+    for (const auto& s : m_Servers) {
         arr.push_back({
-            {"name", s.name},
-            {"url", s.url},
-            {"capabilities", s.capabilities},
-            {"priority", s.priority}
+            {"name", s.m_Name},
+            {"url", s.m_Url},
+            {"capabilities", s.m_Capabilities},
+            {"priority", s.m_Priority}
         });
     }
     return arr;

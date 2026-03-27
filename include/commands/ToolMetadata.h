@@ -4,11 +4,11 @@
 #include <string>
 
 /// Unified metadata for MCP tools. Each command can self-describe by
-/// overriding ICommandStrategy::metadata() and returning one of these.
+/// overriding ICommandStrategy::GetMetadata() and returning one of these.
 struct ToolMetadata {
-    std::string name;
-    std::string description;
-    nlohmann::json inputSchema;       // JSON Schema for MCP tools/list
-    std::string defaultModel;          // preferred LLM model (empty = use global default)
-    nlohmann::json defaultParameters;  // {temperature, max_tokens, ...} (empty = none)
+    std::string m_Name;
+    std::string m_Description;
+    nlohmann::json m_InputSchema;       // JSON Schema for MCP tools/list
+    std::string m_DefaultModel;          // preferred LLM model (empty = use global default)
+    nlohmann::json m_DefaultParameters;  // {temperature, max_tokens, ...} (empty = none)
 };

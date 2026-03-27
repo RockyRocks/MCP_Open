@@ -1,5 +1,5 @@
 #pragma once
-#include "commands/ICommandStrategy.h"
+#include <commands/ICommandStrategy.h>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -7,15 +7,15 @@
 
 class CommandRegistry {
 public:
-    void registerCommand(const std::string& name, std::shared_ptr<ICommandStrategy> command);
-    std::shared_ptr<ICommandStrategy> resolve(const std::string& name) const;
-    bool hasCommand(const std::string& name) const;
-    std::vector<std::string> listCommands() const;
+    void RegisterCommand(const std::string& name, std::shared_ptr<ICommandStrategy> command);
+    std::shared_ptr<ICommandStrategy> Resolve(const std::string& name) const;
+    bool HasCommand(const std::string& name) const;
+    std::vector<std::string> ListCommands() const;
 
-    /// Returns metadata for all registered commands, querying each command's metadata().
-    /// Fills in name/description/schema defaults for commands that don't override metadata().
-    std::vector<ToolMetadata> listToolMetadata() const;
+    /// Returns metadata for all registered commands, querying each command's GetMetadata().
+    /// Fills in name/description/schema defaults for commands that don't override GetMetadata().
+    std::vector<ToolMetadata> ListToolMetadata() const;
 
 private:
-    std::unordered_map<std::string, std::shared_ptr<ICommandStrategy>> commands_;
+    std::unordered_map<std::string, std::shared_ptr<ICommandStrategy>> m_Commands;
 };

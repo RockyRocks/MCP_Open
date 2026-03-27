@@ -4,5 +4,5 @@
 class IRequestHandler {
 public:
     virtual ~IRequestHandler() = default;
-    virtual nlohmann::json handle(const nlohmann::json& request) = 0;
+    virtual nlohmann::json Handle(const nlohmann::json& request) = 0;
 };

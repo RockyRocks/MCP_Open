@@ -7,9 +7,9 @@ class JsonSchemaValidator {
 public:
     JsonSchemaValidator() = delete;
     explicit JsonSchemaValidator(const nlohmann::json& schema);
-    bool validate(const nlohmann::json& data);
-    std::string getErrorMessage() const;
+    bool Validate(const nlohmann::json& data);
+    std::string GetErrorMessage() const;
 private:
-    nlohmann::json_schema::json_validator validator;
-    std::string lastError;
+    nlohmann::json_schema::json_validator m_Validator;
+    std::string m_LastError;
 };

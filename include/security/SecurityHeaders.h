@@ -4,5 +4,5 @@
 
 class SecurityHeaders {
 public:
-    static std::unordered_map<std::string, std::string> getDefaults();
+    static std::unordered_map<std::string, std::string> GetDefaults();
 };

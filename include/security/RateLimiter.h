@@ -7,16 +7,16 @@
 class RateLimiter {
 public:
     explicit RateLimiter(size_t requestsPerMinute = 60);
-    bool allowRequest(const std::string& clientIp);
-    void reset();
+    bool AllowRequest(const std::string& clientIp);
+    void Reset();
 
 private:
     struct ClientBucket {
-        size_t tokens;
-        std::chrono::steady_clock::time_point lastRefill;
+        size_t m_Tokens;
+        std::chrono::steady_clock::time_point m_LastRefill;
     };
 
-    size_t maxTokens_;
-    std::unordered_map<std::string, ClientBucket> buckets_;
-    std::mutex mtx_;
+    size_t m_MaxTokens;
+    std::unordered_map<std::string, ClientBucket> m_Buckets;
+    std::mutex m_Mtx;
 };

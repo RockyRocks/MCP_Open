@@ -1,11 +1,11 @@
-#include "commands/ICommandStrategy.h"
+#include <commands/ICommandStrategy.h>
 #include <nlohmann/json.hpp>
 #include <future>
 #include <thread>
 
 class EchoCommand : public ICommandStrategy {
 public:
-    std::future<nlohmann::json> executeAsync(const nlohmann::json& request) override {
+    std::future<nlohmann::json> ExecuteAsync(const nlohmann::json& request) override {
         return std::async(std::launch::async, [request]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             nlohmann::json r = {{"status", "ok"}, {"echo", request}};
@@ -13,7 +13,7 @@ public:
         });
     }
 
-    ToolMetadata metadata() const override {
+    ToolMetadata GetMetadata() const override {
         return {
             "echo",
             "Echo back the input message",
@@ -30,6 +30,6 @@ public:
     }
 };
 
-std::shared_ptr<ICommandStrategy> createEchoCommand() {
+std::shared_ptr<ICommandStrategy> CreateEchoCommand() {
     return std::make_shared<EchoCommand>();
 }

@@ -1,6 +1,6 @@
-#include "core/ProtocolHandler.h"
-#include "validation/JsonSchemaValidator.h"
-#include "core/Logger.h"
+#include <core/ProtocolHandler.h>
+#include <validation/JsonSchemaValidator.h>
+#include <core/Logger.h>
 #include <nlohmann/json.hpp>
 
 static const nlohmann::json requestSchema = R"({
@@ -26,49 +26,49 @@ ProtocolHandler::ProtocolHandler(std::shared_ptr<CommandRegistry> registry,
                                    std::shared_ptr<RateLimiter> rateLimiter,
                                    std::shared_ptr<ApiKeyValidator> apiKeyValidator,
                                    size_t maxBodySize)
-    : registry_(std::move(registry))
-    , rateLimiter_(std::move(rateLimiter))
-    , apiKeyValidator_(std::move(apiKeyValidator))
-    , maxBodySize_(maxBodySize) {}
+    : m_Registry(std::move(registry))
+    , m_RateLimiter(std::move(rateLimiter))
+    , m_ApiKeyValidator(std::move(apiKeyValidator))
+    , m_MaxBodySize(maxBodySize) {}
 
-nlohmann::json ProtocolHandler::handle(const nlohmann::json& request) {
-    if (!validateRequest(request)) {
+nlohmann::json ProtocolHandler::Handle(const nlohmann::json& request) {
+    if (!ValidateRequest(request)) {
         return {{"status", "error"}, {"error", "Invalid request schema"}};
     }
 
     std::string command = request["command"].get<std::string>();
-    auto cmd = registry_->resolve(command);
+    auto cmd = m_Registry->Resolve(command);
     if (!cmd) {
         return {{"status", "error"},
                 {"error", "Unknown command: " + command},
-                {"available_commands", registry_->listCommands()}};
+                {"available_commands", m_Registry->ListCommands()}};
     }
 
     try {
-        auto future = cmd->executeAsync(request);
+        auto future = cmd->ExecuteAsync(request);
         return future.get();
     } catch (const std::exception& e) {
-        Logger::getInstance().log(std::string("Command execution failed: ") + e.what());
+        Logger::GetInstance().Log(std::string("Command execution failed: ") + e.what());
         return {{"status", "error"}, {"error", "Command execution failed"}};
     }
 }
 
-std::string ProtocolHandler::handleRequest(const std::string& body,
+std::string ProtocolHandler::HandleRequest(const std::string& body,
                                              const std::string& clientIp,
                                              const std::string& authHeader) {
     // Security: Check payload size
-    if (!InputSanitizer::validatePayloadSize(body, maxBodySize_)) {
+    if (!InputSanitizer::ValidatePayloadSize(body, m_MaxBodySize)) {
         return R"({"status":"error","error":"Payload too large"})";
     }
 
     // Security: Rate limiting
-    if (rateLimiter_ && !rateLimiter_->allowRequest(clientIp)) {
+    if (m_RateLimiter && !m_RateLimiter->AllowRequest(clientIp)) {
         return R"({"status":"error","error":"Rate limit exceeded"})";
     }
 
     // Security: API key validation
-    if (apiKeyValidator_ && apiKeyValidator_->isEnabled()) {
-        if (!apiKeyValidator_->validate(authHeader)) {
+    if (m_ApiKeyValidator && m_ApiKeyValidator->IsEnabled()) {
+        if (!m_ApiKeyValidator->Validate(authHeader)) {
             return R"({"status":"error","error":"Unauthorized"})";
         }
     }
@@ -82,28 +82,28 @@ std::string ProtocolHandler::handleRequest(const std::string& body,
     }
 
     // Security: Check JSON depth
-    if (!InputSanitizer::validateJsonDepth(req)) {
+    if (!InputSanitizer::ValidateJsonDepth(req)) {
         return R"({"status":"error","error":"JSON nesting too deep"})";
     }
 
     // Handle the request
-    auto result = handle(req);
-    return createResponse(result);
+    auto result = Handle(req);
+    return CreateResponse(result);
 }
 
-bool ProtocolHandler::validateRequest(const nlohmann::json& req) {
+bool ProtocolHandler::ValidateRequest(const nlohmann::json& req) {
     JsonSchemaValidator v(requestSchema);
-    if (!v.validate(req)) {
-        Logger::getInstance().log(std::string("Request validation failed: ") + v.getErrorMessage());
+    if (!v.Validate(req)) {
+        Logger::GetInstance().Log(std::string("Request validation failed: ") + v.GetErrorMessage());
         return false;
     }
     return true;
 }
 
-std::string ProtocolHandler::createResponse(const nlohmann::json& data) {
+std::string ProtocolHandler::CreateResponse(const nlohmann::json& data) {
     JsonSchemaValidator v(responseSchema);
-    if (!v.validate(data)) {
-        Logger::getInstance().log(std::string("Response validation failed: ") + v.getErrorMessage());
+    if (!v.Validate(data)) {
+        Logger::GetInstance().Log(std::string("Response validation failed: ") + v.GetErrorMessage());
         return R"({"status":"error","error":"Invalid response"})";
     }
     return data.dump();

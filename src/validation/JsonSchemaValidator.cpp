@@ -1,17 +1,17 @@
-#include "validation/JsonSchemaValidator.h"
+#include <validation/JsonSchemaValidator.h>
 
 JsonSchemaValidator::JsonSchemaValidator(const nlohmann::json& schema) {
-    validator.set_root_schema(schema);
+    m_Validator.set_root_schema(schema);
 }
 
-bool JsonSchemaValidator::validate(const nlohmann::json& data) {
+bool JsonSchemaValidator::Validate(const nlohmann::json& data) {
     try {
-        validator.validate(data);
+        m_Validator.validate(data);
         return true;
     } catch (const std::exception& e) {
-        lastError = e.what();
+        m_LastError = e.what();
         return false;
     }
 }
 
-std::string JsonSchemaValidator::getErrorMessage() const { return lastError; }
+std::string JsonSchemaValidator::GetErrorMessage() const { return m_LastError; }

@@ -1,24 +1,24 @@
-#include "core/Config.h"
-#include "core/Logger.h"
-#include "core/ProtocolHandler.h"
-#include "core/ThreadPool.h"
-#include "commands/CommandRegistry.h"
-#include "commands/EchoCommand.h"
-#include "llm/LiteLLMProvider.h"
-#include "llm/LLMCommand.h"
-#include "discovery/McpServerRegistry.h"
-#include "discovery/CompositeCommand.h"
-#include "skills/SkillEngine.h"
-#include "skills/SkillCommand.h"
-#include "http/HttplibClient.h"
-#include "security/RateLimiter.h"
-#include "security/ApiKeyValidator.h"
-#include "server/IServer.h"
-#include "server/HttplibServer.h"
-#include "server/StdioTransport.h"
+#include <core/Config.h>
+#include <core/Logger.h>
+#include <core/ProtocolHandler.h>
+#include <core/ThreadPool.h>
+#include <commands/CommandRegistry.h>
+#include <commands/EchoCommand.h>
+#include <llm/LiteLLMProvider.h>
+#include <llm/LLMCommand.h>
+#include <discovery/McpServerRegistry.h>
+#include <discovery/CompositeCommand.h>
+#include <skills/SkillEngine.h>
+#include <skills/SkillCommand.h>
+#include <http/HttplibClient.h>
+#include <security/RateLimiter.h>
+#include <security/ApiKeyValidator.h>
+#include <server/IServer.h>
+#include <server/HttplibServer.h>
+#include <server/StdioTransport.h>
 
 #ifdef USE_UWS
-#include "server/UwsServer.h"
+#include <server/UwsServer.h>
 #endif
 
 #include <iostream>
@@ -41,11 +41,11 @@ int main(int argc, char** argv) {
     // Load config (file if exists, otherwise env)
     Config config;
     try {
-        config = Config::loadFromFile(configPath);
-        Logger::getInstance().log("Config loaded from " + configPath);
+        config = Config::LoadFromFile(configPath);
+        Logger::GetInstance().Log("Config loaded from " + configPath);
     } catch (...) {
-        Logger::getInstance().log("Config file not found, using environment variables");
-        config = Config::loadFromEnv();
+        Logger::GetInstance().Log("Config file not found, using environment variables");
+        config = Config::LoadFromEnv();
     }
 
     // HTTP client for outbound calls
@@ -56,56 +56,56 @@ int main(int argc, char** argv) {
 
     // Skills engine
     auto skillEngine = std::make_shared<SkillEngine>();
-    skillEngine->loadFromDirectory(config.skillsDirectory());
+    skillEngine->LoadFromDirectory(config.GetSkillsDirectory());
 
     // MCP server discovery
     auto mcpRegistry = std::make_shared<McpServerRegistry>();
     try {
-        *mcpRegistry = McpServerRegistry::loadFromFile(config.mcpServersConfigPath());
+        *mcpRegistry = McpServerRegistry::LoadFromFile(config.GetMcpServersConfigPath());
     } catch (const std::exception& e) {
-        Logger::getInstance().log(std::string("MCP servers config: ") + e.what());
+        Logger::GetInstance().Log(std::string("MCP servers config: ") + e.what());
     }
 
     // Command registry
     auto commandRegistry = std::make_shared<CommandRegistry>();
-    commandRegistry->registerCommand("echo", createEchoCommand());
-    commandRegistry->registerCommand("llm", std::make_shared<LLMCommand>(llmProvider));
-    commandRegistry->registerCommand("skill", std::make_shared<SkillCommand>(skillEngine, llmProvider));
-    commandRegistry->registerCommand("remote", std::make_shared<CompositeCommand>(mcpRegistry, httpClient));
+    commandRegistry->RegisterCommand("echo", CreateEchoCommand());
+    commandRegistry->RegisterCommand("llm", std::make_shared<LLMCommand>(llmProvider));
+    commandRegistry->RegisterCommand("skill", std::make_shared<SkillCommand>(skillEngine, llmProvider));
+    commandRegistry->RegisterCommand("remote", std::make_shared<CompositeCommand>(mcpRegistry, httpClient));
 
-    Logger::getInstance().log("Registered commands: echo, llm, skill, remote");
+    Logger::GetInstance().Log("Registered commands: echo, llm, skill, remote");
 
     // stdio transport mode (MCP protocol over JSON-RPC 2.0)
     if (stdioMode) {
         StdioTransport transport(commandRegistry, skillEngine, mcpRegistry);
-        transport.run();
+        transport.Run();
         return 0;
     }
 
     // Security
-    auto rateLimiter = std::make_shared<RateLimiter>(config.rateLimitRequestsPerMinute());
+    auto rateLimiter = std::make_shared<RateLimiter>(config.GetRateLimitRequestsPerMinute());
     auto apiKeyValidator = std::make_shared<ApiKeyValidator>(
-        config.authApiKey(), config.authEnabled());
+        config.GetAuthApiKey(), config.IsAuthEnabled());
 
     // Protocol handler
     auto protocolHandler = std::make_shared<ProtocolHandler>(
-        commandRegistry, rateLimiter, apiKeyValidator, config.maxRequestBodySize());
+        commandRegistry, rateLimiter, apiKeyValidator, config.GetMaxRequestBodySize());
 
     // Server
     std::unique_ptr<IServer> server;
 #ifdef USE_UWS
     server = std::make_unique<UwsServer>();
-    Logger::getInstance().log("Using uWebSockets server");
+    Logger::GetInstance().Log("Using uWebSockets server");
 #else
     server = std::make_unique<HttplibServer>();
-    Logger::getInstance().log("Using httplib server");
+    Logger::GetInstance().Log("Using httplib server");
 #endif
 
     // Routes
-    server->addRoute("POST", "/mcp",
+    server->AddRoute("POST", "/mcp",
         [protocolHandler](const std::string& body, const std::string& clientIp,
                            std::function<void(int, const std::string&)> respond) {
-            auto result = protocolHandler->handleRequest(body, clientIp);
+            auto result = protocolHandler->HandleRequest(body, clientIp);
 
             int status = 200;
             try {
@@ -121,34 +121,34 @@ int main(int argc, char** argv) {
             respond(status, result);
         });
 
-    server->addRoute("GET", "/health",
+    server->AddRoute("GET", "/health",
         [](const std::string&, const std::string&,
            std::function<void(int, const std::string&)> respond) {
             respond(200, R"({"status":"ok"})");
         });
 
-    server->addRoute("GET", "/skills",
+    server->AddRoute("GET", "/skills",
         [skillEngine](const std::string&, const std::string&,
                        std::function<void(int, const std::string&)> respond) {
-            respond(200, skillEngine->listSkillsJson().dump());
+            respond(200, skillEngine->ListSkillsJson().dump());
         });
 
-    server->addRoute("GET", "/servers",
+    server->AddRoute("GET", "/servers",
         [mcpRegistry](const std::string&, const std::string&,
                        std::function<void(int, const std::string&)> respond) {
-            respond(200, mcpRegistry->toJson().dump());
+            respond(200, mcpRegistry->ToJson().dump());
         });
 
-    server->addRoute("GET", "/commands",
+    server->AddRoute("GET", "/commands",
         [commandRegistry](const std::string&, const std::string&,
                            std::function<void(int, const std::string&)> respond) {
-            nlohmann::json cmds = commandRegistry->listCommands();
+            nlohmann::json cmds = commandRegistry->ListCommands();
             respond(200, cmds.dump());
         });
 
-    int port = config.serverPort();
-    Logger::getInstance().log("Starting server on port " + std::to_string(port));
-    server->listen("0.0.0.0", port);
+    int port = config.GetServerPort();
+    Logger::GetInstance().Log("Starting server on port " + std::to_string(port));
+    server->Listen("0.0.0.0", port);
 
     return 0;
 }

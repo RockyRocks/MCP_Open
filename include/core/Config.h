@@ -6,21 +6,21 @@
 
 class Config {
 public:
-    static Config loadFromFile(const std::string& path);
-    static Config loadFromEnv();
+    static Config LoadFromFile(const std::string& path);
+    static Config LoadFromEnv();
 
-    int serverPort() const;
-    std::string litellmBaseUrl() const;
-    std::string defaultModel() const;
-    size_t threadPoolSize() const;
-    size_t maxRequestBodySize() const;
-    size_t rateLimitRequestsPerMinute() const;
-    bool authEnabled() const;
-    std::string authApiKey() const;
-    std::string skillsDirectory() const;
-    std::string mcpServersConfigPath() const;
-    const nlohmann::json& raw() const;
+    int GetServerPort() const;
+    std::string GetLiteLlmBaseUrl() const;
+    std::string GetDefaultModel() const;
+    size_t GetThreadPoolSize() const;
+    size_t GetMaxRequestBodySize() const;
+    size_t GetRateLimitRequestsPerMinute() const;
+    bool IsAuthEnabled() const;
+    std::string GetAuthApiKey() const;
+    std::string GetSkillsDirectory() const;
+    std::string GetMcpServersConfigPath() const;
+    const nlohmann::json& GetRaw() const;
 
 private:
-    nlohmann::json data_;
+    nlohmann::json m_Data;
 };

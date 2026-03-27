@@ -14,13 +14,13 @@ public:
     ~ThreadPool();
 
     template<typename F, typename... Args>
-    auto submit(F&& f, Args&&... args) -> std::future<decltype(f(args...))>;
+    auto Submit(F&& f, Args&&... args) -> std::future<decltype(f(args...))>;
 
-    void shutdown();
+    void Shutdown();
 private:
-    std::vector<std::thread> workers;
-    std::queue<std::function<void()>> tasks;
-    std::mutex mtx;
-    std::condition_variable cv;
-    bool stopping = false;
+    std::vector<std::thread> m_Workers;
+    std::queue<std::function<void()>> m_Tasks;
+    std::mutex m_Mtx;
+    std::condition_variable m_Cv;
+    bool m_Stopping = false;
 };

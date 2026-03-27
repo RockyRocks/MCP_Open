@@ -1,13 +1,13 @@
-#include "skills/SkillCommand.h"
-#include "core/Logger.h"
+#include <skills/SkillCommand.h>
+#include <core/Logger.h>
 
 SkillCommand::SkillCommand(std::shared_ptr<SkillEngine> engine,
                              std::shared_ptr<ILLMProvider> provider)
-    : engine_(std::move(engine)), provider_(std::move(provider)) {}
+    : m_Engine(std::move(engine)), m_Provider(std::move(provider)) {}
 
-std::future<nlohmann::json> SkillCommand::executeAsync(const nlohmann::json& request) {
-    auto eng = engine_;
-    auto prov = provider_;
+std::future<nlohmann::json> SkillCommand::ExecuteAsync(const nlohmann::json& request) {
+    auto eng = m_Engine;
+    auto prov = m_Provider;
 
     return std::async(std::launch::async, [eng, prov, request]() -> nlohmann::json {
         if (!request.contains("payload") || !request["payload"].contains("skill")) {
@@ -15,12 +15,12 @@ std::future<nlohmann::json> SkillCommand::executeAsync(const nlohmann::json& req
         }
 
         std::string skillName = request["payload"]["skill"].get<std::string>();
-        auto skillOpt = eng->resolve(skillName);
+        auto skillOpt = eng->Resolve(skillName);
 
         if (!skillOpt.has_value()) {
             return {{"status", "error"},
                     {"error", "Unknown skill: " + skillName},
-                    {"available_skills", eng->listSkills()}};
+                    {"available_skills", eng->ListSkills()}};
         }
 
         const auto& skill = skillOpt.value();
@@ -28,29 +28,29 @@ std::future<nlohmann::json> SkillCommand::executeAsync(const nlohmann::json& req
 
         std::string prompt;
         try {
-            prompt = eng->renderPrompt(skill, variables);
+            prompt = eng->RenderPrompt(skill, variables);
         } catch (const std::invalid_argument& e) {
             return {{"status", "error"}, {"error", e.what()}};
         }
 
         // Use model from request, skill default, or provider default
-        std::string model = request["payload"].value("model", skill.defaultModel);
+        std::string model = request["payload"].value("model", skill.m_DefaultModel);
 
         LLMRequest llmReq;
-        llmReq.model = model;
+        llmReq.m_Model = model;
 
         // Build messages with optional system prompt + rules
         nlohmann::json messages = nlohmann::json::array();
 
         std::string systemContent;
-        if (!skill.systemPrompt.empty()) {
-            systemContent = skill.systemPrompt;
+        if (!skill.m_SystemPrompt.empty()) {
+            systemContent = skill.m_SystemPrompt;
         }
-        if (!skill.rules.empty()) {
+        if (!skill.m_Rules.empty()) {
             if (!systemContent.empty()) systemContent += "\n\n";
             systemContent += "Rules:\n";
-            for (size_t i = 0; i < skill.rules.size(); ++i) {
-                systemContent += std::to_string(i + 1) + ". " + skill.rules[i] + "\n";
+            for (size_t i = 0; i < skill.m_Rules.size(); ++i) {
+                systemContent += std::to_string(i + 1) + ". " + skill.m_Rules[i] + "\n";
             }
         }
         if (!systemContent.empty()) {
@@ -58,31 +58,31 @@ std::future<nlohmann::json> SkillCommand::executeAsync(const nlohmann::json& req
         }
         messages.push_back({{"role", "user"}, {"content", prompt}});
 
-        llmReq.messages = messages;
-        llmReq.parameters = skill.defaultParameters;
+        llmReq.m_Messages = messages;
+        llmReq.m_Parameters = skill.m_DefaultParameters;
 
         // Override with request-level parameters if provided
         if (request["payload"].contains("parameters")) {
             for (const auto& [k, v] : request["payload"]["parameters"].items()) {
-                llmReq.parameters[k] = v;
+                llmReq.m_Parameters[k] = v;
             }
         }
 
-        auto future = prov->complete(llmReq);
+        auto future = prov->Complete(llmReq);
         auto resp = future.get();
 
         return nlohmann::json{
             {"status", "ok"},
             {"skill", skillName},
-            {"content", resp.content},
+            {"content", resp.m_Content},
             {"model", model},
-            {"input_tokens", resp.inputTokens},
-            {"output_tokens", resp.outputTokens}
+            {"input_tokens", resp.m_InputTokens},
+            {"output_tokens", resp.m_OutputTokens}
         };
     });
 }
 
-ToolMetadata SkillCommand::metadata() const {
+ToolMetadata SkillCommand::GetMetadata() const {
     return {
         "skill",
         "Execute a skill prompt template with variables",

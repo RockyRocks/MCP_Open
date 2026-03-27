@@ -1,5 +1,5 @@
-#include "skills/SkillEngine.h"
-#include "core/Logger.h"
+#include <skills/SkillEngine.h>
+#include <core/Logger.h>
 #include <fstream>
 #include <filesystem>
 #include <regex>
@@ -7,9 +7,9 @@
 
 namespace fs = std::filesystem;
 
-void SkillEngine::loadFromDirectory(const std::string& skillsDir) {
+void SkillEngine::LoadFromDirectory(const std::string& skillsDir) {
     if (!fs::exists(skillsDir) || !fs::is_directory(skillsDir)) {
-        Logger::getInstance().log("Skills directory not found: " + skillsDir);
+        Logger::GetInstance().Log("Skills directory not found: " + skillsDir);
         return;
     }
 
@@ -21,86 +21,86 @@ void SkillEngine::loadFromDirectory(const std::string& skillsDir) {
             auto data = nlohmann::json::parse(file);
 
             SkillDefinition skill;
-            skill.name = data.value("name", "");
-            skill.description = data.value("description", "");
-            skill.promptTemplate = data.value("prompt_template", "");
-            skill.defaultModel = data.value("default_model", "");
-            skill.defaultParameters = data.value("default_parameters", nlohmann::json::object());
+            skill.m_Name = data.value("name", "");
+            skill.m_Description = data.value("description", "");
+            skill.m_PromptTemplate = data.value("prompt_template", "");
+            skill.m_DefaultModel = data.value("default_model", "");
+            skill.m_DefaultParameters = data.value("default_parameters", nlohmann::json::object());
 
             if (data.contains("required_variables") && data["required_variables"].is_array()) {
                 for (const auto& v : data["required_variables"]) {
-                    skill.requiredVariables.push_back(v.get<std::string>());
+                    skill.m_RequiredVariables.push_back(v.get<std::string>());
                 }
             }
 
-            skill.systemPrompt = data.value("system_prompt", "");
+            skill.m_SystemPrompt = data.value("system_prompt", "");
             if (data.contains("rules") && data["rules"].is_array()) {
                 for (const auto& r : data["rules"]) {
-                    skill.rules.push_back(r.get<std::string>());
+                    skill.m_Rules.push_back(r.get<std::string>());
                 }
             }
 
-            if (!skill.name.empty() && !skill.promptTemplate.empty()) {
-                skills_[skill.name] = std::move(skill);
-                Logger::getInstance().log("Loaded skill: " + data["name"].get<std::string>());
+            if (!skill.m_Name.empty() && !skill.m_PromptTemplate.empty()) {
+                m_Skills[skill.m_Name] = std::move(skill);
+                Logger::GetInstance().Log("Loaded skill: " + data["name"].get<std::string>());
             }
         } catch (const std::exception& e) {
-            Logger::getInstance().log("Failed to load skill from " +
+            Logger::GetInstance().Log("Failed to load skill from " +
                                        entry.path().string() + ": " + e.what());
         }
     }
 
-    Logger::getInstance().log("Loaded " + std::to_string(skills_.size()) + " skills");
+    Logger::GetInstance().Log("Loaded " + std::to_string(m_Skills.size()) + " skills");
 }
 
-void SkillEngine::loadSkill(const SkillDefinition& skill) {
-    if (skill.name.empty()) {
+void SkillEngine::LoadSkill(const SkillDefinition& skill) {
+    if (skill.m_Name.empty()) {
         throw std::invalid_argument("Skill name cannot be empty");
     }
-    skills_[skill.name] = skill;
+    m_Skills[skill.m_Name] = skill;
 }
 
-std::optional<SkillDefinition> SkillEngine::resolve(const std::string& name) const {
-    auto it = skills_.find(name);
-    if (it == skills_.end()) return std::nullopt;
+std::optional<SkillDefinition> SkillEngine::Resolve(const std::string& name) const {
+    auto it = m_Skills.find(name);
+    if (it == m_Skills.end()) return std::nullopt;
     return it->second;
 }
 
-std::vector<std::string> SkillEngine::listSkills() const {
+std::vector<std::string> SkillEngine::ListSkills() const {
     std::vector<std::string> names;
-    names.reserve(skills_.size());
-    for (const auto& [name, _] : skills_) {
+    names.reserve(m_Skills.size());
+    for (const auto& [name, _] : m_Skills) {
         names.push_back(name);
     }
     return names;
 }
 
-nlohmann::json SkillEngine::listSkillsJson() const {
+nlohmann::json SkillEngine::ListSkillsJson() const {
     nlohmann::json arr = nlohmann::json::array();
-    for (const auto& [name, skill] : skills_) {
+    for (const auto& [name, skill] : m_Skills) {
         arr.push_back({
-            {"name", skill.name},
-            {"description", skill.description},
-            {"default_model", skill.defaultModel},
-            {"required_variables", skill.requiredVariables}
+            {"name", skill.m_Name},
+            {"description", skill.m_Description},
+            {"default_model", skill.m_DefaultModel},
+            {"required_variables", skill.m_RequiredVariables}
         });
     }
     return arr;
 }
 
-std::string SkillEngine::renderPrompt(const SkillDefinition& skill,
+std::string SkillEngine::RenderPrompt(const SkillDefinition& skill,
                                        const nlohmann::json& variables) const {
     // Validate required variables
-    for (const auto& required : skill.requiredVariables) {
+    for (const auto& required : skill.m_RequiredVariables) {
         if (!variables.contains(required)) {
             throw std::invalid_argument("Missing required variable: " + required);
         }
     }
 
-    return interpolate(skill.promptTemplate, variables);
+    return Interpolate(skill.m_PromptTemplate, variables);
 }
 
-std::string SkillEngine::sanitizeVariable(const std::string& value) {
+std::string SkillEngine::SanitizeVariable(const std::string& value) {
     // Strip {{ and }} to prevent template injection
     std::string result = value;
     std::string::size_type pos;
@@ -113,7 +113,7 @@ std::string SkillEngine::sanitizeVariable(const std::string& value) {
     return result;
 }
 
-std::string SkillEngine::interpolate(const std::string& templ, const nlohmann::json& vars) {
+std::string SkillEngine::Interpolate(const std::string& templ, const nlohmann::json& vars) {
     std::string result = templ;
     std::regex placeholder(R"(\{\{(\w+)\}\})");
     std::smatch match;
@@ -128,7 +128,7 @@ std::string SkillEngine::interpolate(const std::string& templ, const nlohmann::j
             std::string val = vars[varName].is_string()
                                   ? vars[varName].get<std::string>()
                                   : vars[varName].dump();
-            result += sanitizeVariable(val);
+            result += SanitizeVariable(val);
         } else {
             result += match[0].str(); // Leave placeholder if not provided
         }
