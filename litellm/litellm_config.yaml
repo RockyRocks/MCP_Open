@@ -20,3 +20,27 @@ litellm_settings:
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
+
+# ---------------------------------------------------------------------------
+# MCP Servers — expose this server's tools to every LLM through the proxy.
+#
+# Option A: HTTP transport (default — run `mcp_server` without --stdio)
+#   Set the URL to match the port in config/mcp_config.json (default 8080).
+#
+# Option B: Stdio transport — proxy spawns the process directly.
+#   Uncomment the stdio block and set the absolute path to the executable.
+# ---------------------------------------------------------------------------
+mcp_servers:
+  mcp_open:
+    # Option A: HTTP (recommended)
+    url: "http://localhost:8080"
+    transport: "http"
+    allow_all_keys: true   # available to every API key / team
+
+  # mcp_open_stdio:
+  #   transport: "stdio"
+  #   command: "/path/to/build/mcp_server"
+  #   args: ["--stdio"]
+  #   env:
+  #     MCP_API_KEY: os.environ/MCP_API_KEY
+  #   allow_all_keys: true

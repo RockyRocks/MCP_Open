@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.16)
 cmake_policy(SET CMP0077 NEW)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
 project(MCP_Server_CMake LANGUAGES CXX)
@@ -11,6 +11,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(USE_UWS "Use uWebSockets (async) server" OFF)
 option(BUILD_CSHARP "Build C# wrapper (requires dotnet SDK)" ON)
+option(UNITY_BUILD "Enable CMake unity build for the core library" OFF)
 set(TEST_FRAMEWORK "GTest" CACHE STRING "GTest or Catch2")
 
 include(FetchContent)
@@ -135,6 +136,9 @@ if(USE_UWS)
 endif()
 
 add_library(core STATIC ${CORE_SOURCES})
+if(UNITY_BUILD)
+  set_target_properties(core PROPERTIES UNITY_BUILD ON)
+endif()
 target_include_directories(core PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(core PUBLIC
   nlohmann_json::nlohmann_json

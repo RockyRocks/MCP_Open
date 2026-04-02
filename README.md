@@ -9,7 +9,7 @@ An enterprise-grade **Model Context Protocol (MCP)** server implemented in C++20
 ### MCP Tools
 
 | Tool | Description |
-|------|-------------|
+| ---- | ----------- |
 | `echo` | Simple echo for connectivity testing |
 | `llm` | LLM completion via a LiteLLM proxy (multi-provider: OpenAI, Anthropic, etc.) |
 | `skill` | Prompt-template engine — loads JSON skill definitions with `{{variable}}` interpolation |
@@ -23,7 +23,7 @@ An enterprise-grade **Model Context Protocol (MCP)** server implemented in C++20
 ### HTTP REST API
 
 | Endpoint | Method | Description |
-|----------|--------|-------------|
+| -------- | ------ | ----------- |
 | `/mcp` | POST | Main MCP protocol handler (protected) |
 | `/health` | GET | Health check |
 | `/skills` | GET | List available skills |
@@ -64,7 +64,7 @@ A shared-library C API (`mcp_capi`) exposes lifecycle, command, LLM, skill, and 
 ## Supported Platforms
 
 | OS | Compiler | Minimum Version |
-|----|----------|-----------------|
+| -- | -------- | --------------- |
 | **Windows** | MSVC (Visual Studio 2022) | v17+ with Desktop C++ workload |
 | **Linux** | GCC | 10+ |
 | **Linux** | Clang | 10+ |
@@ -184,7 +184,7 @@ sequenceDiagram
 
 ### Directory Structure
 
-```
+```text
 MCP_Open/
 ├── include/                # Public headers
 │   ├── commands/           #   Command registry & ICommandStrategy
@@ -216,7 +216,7 @@ MCP_Open/
 All fetched automatically via CMake `FetchContent`:
 
 | Library | Version | Purpose |
-|---------|---------|---------|
+| ------- | ------- | ------- |
 | [nlohmann/json](https://github.com/nlohmann/json) | 3.11.2 | JSON serialization |
 | [json-schema-validator](https://github.com/pboettch/json-schema-validator) | 2.3.0 | JSON Schema validation |
 | [cpp-httplib](https://github.com/yhirose/cpp-httplib) | 0.26.0 | HTTP client & server |
@@ -256,17 +256,159 @@ build\Release\mcp_server.exe
 ### CMake Options
 
 | Option | Default | Description |
-|--------|---------|-------------|
+| ------ | ------- | ----------- |
 | `USE_UWS` | `OFF` | Use uWebSockets async server |
 | `BUILD_CSHARP` | `ON` | Build C# wrapper (requires .NET 8 SDK) |
 | `TEST_FRAMEWORK` | `GTest` | `GTest` or `Catch2` |
 
 ---
 
+## Integrations
+
+### Claude Code
+
+Register the server with [Claude Code](https://claude.ai/code) so it is available as a tool source in your AI-assisted development workflow.
+
+#### Register with `claude mcp add`
+
+##### Linux / macOS
+
+```bash
+claude mcp add mcp-open -- /path/to/MCP_Open/build/mcp_server
+```
+
+##### Windows
+
+```powershell
+claude mcp add mcp-open -- "C:\path\to\MCP_Open\build\Release\mcp_server.exe"
+```
+
+With LiteLLM API keys (required for `llm` and `skill` tools):
+
+```bash
+# Linux / macOS
+claude mcp add mcp-open \
+  --env ANTHROPIC_API_KEY=sk-ant-... \
+  --env LITELLM_MASTER_KEY=sk-litellm-... \
+  -- /path/to/build/mcp_server
+
+# Windows
+claude mcp add mcp-open ^
+  --env ANTHROPIC_API_KEY=sk-ant-... ^
+  --env LITELLM_MASTER_KEY=sk-litellm-... ^
+  -- "C:\path\to\build\Release\mcp_server.exe"
+```
+
+With MCP server API key (if `api_key` is set in `config/mcp_config.json`):
+
+```bash
+claude mcp add mcp-open --env MCP_API_KEY=your-api-key -- /path/to/build/mcp_server
+```
+
+#### Scope Options
+
+| Scope | Flag | Stored in | When to use |
+| ----- | ---- | --------- | ----------- |
+| `local` (default) | _(omit)_ | `.claude/` in the current directory | Personal, single-project use |
+| `project` | `--scope project` | `.mcp.json` alongside source code | Shared with the team via VCS |
+| `user` | `--scope user` | `~/.claude/` | Available across all projects on this machine |
+
+```bash
+# Share with team via source control
+claude mcp add --scope project mcp-open -- /path/to/build/mcp_server
+
+# Register globally for all projects
+claude mcp add --scope user mcp-open -- /path/to/build/mcp_server
+```
+
+#### Verify
+
+```bash
+claude mcp list           # Confirm mcp-open appears
+claude mcp get mcp-open   # Inspect connection details
+```
+
+Or from within a Claude Code session: `/mcp`
+
+#### Available Tools After Registration
+
+| Tool | Example prompt |
+| ---- | -------------- |
+| `echo` | "Use the echo tool to test the MCP connection" |
+| `llm` | "Use the llm tool to summarize this file" |
+| `skill` | "Run the code_review skill on this function" |
+| `remote` | "Use the remote tool to query my other registered MCP servers" |
+
+---
+
+### LiteLLM Proxy (All LLMs)
+
+Expose this server's tools to **every LLM** routed through your LiteLLM proxy — no per-client configuration required.
+
+#### Step 1 — Start the MCP Server in HTTP mode
+
+```bash
+# Linux / macOS
+./build/mcp_server          # Listens on the port in config/mcp_config.json (default 8080)
+
+# Windows
+build\Release\mcp_server.exe
+```
+
+#### Step 2 — Add to `litellm/litellm_config.yaml`
+
+```yaml
+mcp_servers:
+  mcp_open:
+    url: "http://localhost:8080"   # Match the port in config/mcp_config.json
+    transport: "http"
+    allow_all_keys: true           # Available to every API key / team
+```
+
+Alternatively, let the proxy spawn the process directly via stdio:
+
+```yaml
+mcp_servers:
+  mcp_open:
+    transport: "stdio"
+    command: "/path/to/build/mcp_server"
+    args: ["--stdio"]
+    env:
+      MCP_API_KEY: os.environ/MCP_API_KEY
+    allow_all_keys: true
+```
+
+#### Step 3 — Start the LiteLLM Proxy
+
+```bash
+# Linux / macOS
+cd litellm && ./start_proxy.sh
+
+# Windows
+cd litellm && .\start_proxy.ps1
+```
+
+#### Step 4 — Call Tools via Any LLM
+
+```bash
+curl http://localhost:4000/v1/chat/completions \
+  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-sonnet",
+    "messages": [{"role": "user", "content": "Summarize this code using available tools"}],
+    "tools": [{"type": "mcp", "server_url": "litellm_proxy", "require_approval": "never"}]
+  }'
+```
+
+All models in `litellm_config.yaml` (`claude-sonnet`, `gpt-4o`, `gemini-pro`, …) automatically have access to the `echo`, `llm`, `skill`, and `remote` tools.
+
+---
+
 ## Configuration
 
 | File | Purpose |
-|------|---------|
+| ---- | ------- |
 | `config/mcp_config.json` | Server port, thread pool size, rate limits, auth, LiteLLM URL |
 | `config/mcp_servers.json` | Remote MCP server endpoints for discovery |
 | `skills/*.json` | Skill prompt template definitions |
