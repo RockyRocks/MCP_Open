@@ -121,3 +121,133 @@ TEST(CommandRegistryTest, DefaultModelAndParametersPassThrough) {
     EXPECT_EQ(meta.m_DefaultParameters["temperature"], 0.1);
     EXPECT_EQ(meta.m_DefaultParameters["max_tokens"], 512);
 }
+
+// ---------------------------------------------------------------------------
+// Hidden tool filtering tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+class HiddenCommand : public ICommandStrategy {
+public:
+    std::future<nlohmann::json> ExecuteAsync(const nlohmann::json&) override {
+        return std::async(std::launch::async, []() {
+            return nlohmann::json{{"status", "ok"}};
+        });
+    }
+
+    ToolMetadata GetMetadata() const override {
+        ToolMetadata meta;
+        meta.m_Name = "hidden_tool";
+        meta.m_Description = "This tool is hidden";
+        meta.m_Hidden = true;
+        return meta;
+    }
+};
+
+class SkillSourceCommand : public ICommandStrategy {
+public:
+    std::future<nlohmann::json> ExecuteAsync(const nlohmann::json&) override {
+        return std::async(std::launch::async, []() {
+            return nlohmann::json{{"status", "ok"}};
+        });
+    }
+
+    ToolMetadata GetMetadata() const override {
+        ToolMetadata meta;
+        meta.m_Name = "my_skill";
+        meta.m_Description = "A promoted skill tool";
+        meta.m_Source = ToolSource::JsonSkill;
+        return meta;
+    }
+};
+
+class PluginSourceCommand : public ICommandStrategy {
+public:
+    std::future<nlohmann::json> ExecuteAsync(const nlohmann::json&) override {
+        return std::async(std::launch::async, []() {
+            return nlohmann::json{{"status", "ok"}};
+        });
+    }
+
+    ToolMetadata GetMetadata() const override {
+        ToolMetadata meta;
+        meta.m_Name = "plugin_tool";
+        meta.m_Description = "A plugin tool";
+        meta.m_Source = ToolSource::Plugin;
+        return meta;
+    }
+};
+
+} // anonymous namespace
+
+TEST(CommandRegistryTest, HiddenToolExcludedFromListToolMetadata) {
+    CommandRegistry reg;
+    reg.RegisterCommand("echo", CreateEchoCommand());
+    reg.RegisterCommand("hidden_tool", std::make_shared<HiddenCommand>());
+
+    auto metadata = reg.ListToolMetadata();
+    // Only echo should appear; hidden_tool is filtered out
+    ASSERT_EQ(metadata.size(), 1u);
+    EXPECT_EQ(metadata[0].m_Name, "echo");
+}
+
+TEST(CommandRegistryTest, HiddenToolIsStillResolvable) {
+    // Hidden only means "omit from tools/list", not "refuse to execute"
+    CommandRegistry reg;
+    reg.RegisterCommand("hidden_tool", std::make_shared<HiddenCommand>());
+
+    EXPECT_NE(reg.Resolve("hidden_tool"), nullptr);
+    EXPECT_TRUE(reg.HasCommand("hidden_tool"));
+}
+
+TEST(CommandRegistryTest, ListCommandsIncludesHiddenTools) {
+    // ListCommands() is the internal debug list — includes everything
+    CommandRegistry reg;
+    reg.RegisterCommand("visible", CreateEchoCommand());
+    reg.RegisterCommand("hidden_tool", std::make_shared<HiddenCommand>());
+
+    auto cmds = reg.ListCommands();
+    EXPECT_EQ(cmds.size(), 2u);
+}
+
+TEST(CommandRegistryTest, ToolSourceDefaultsToBuiltIn) {
+    CommandRegistry reg;
+    reg.RegisterCommand("bare_tool", std::make_shared<BareCommand>());
+
+    auto metadata = reg.ListToolMetadata();
+    ASSERT_EQ(metadata.size(), 1u);
+    EXPECT_EQ(metadata[0].m_Source, ToolSource::BuiltIn);
+}
+
+TEST(CommandRegistryTest, JsonSkillSourcePreserved) {
+    CommandRegistry reg;
+    reg.RegisterCommand("my_skill", std::make_shared<SkillSourceCommand>());
+
+    auto metadata = reg.ListToolMetadata();
+    ASSERT_EQ(metadata.size(), 1u);
+    EXPECT_EQ(metadata[0].m_Source, ToolSource::JsonSkill);
+}
+
+TEST(CommandRegistryTest, PluginSourcePreserved) {
+    CommandRegistry reg;
+    reg.RegisterCommand("plugin_tool", std::make_shared<PluginSourceCommand>());
+
+    auto metadata = reg.ListToolMetadata();
+    ASSERT_EQ(metadata.size(), 1u);
+    EXPECT_EQ(metadata[0].m_Source, ToolSource::Plugin);
+}
+
+TEST(CommandRegistryTest, MixedVisibleAndHiddenTools) {
+    CommandRegistry reg;
+    reg.RegisterCommand("echo", CreateEchoCommand());
+    reg.RegisterCommand("hidden1", std::make_shared<HiddenCommand>());
+    reg.RegisterCommand("skill_tool", std::make_shared<SkillSourceCommand>());
+
+    auto metadata = reg.ListToolMetadata();
+    // echo + skill_tool visible; hidden1 filtered
+    EXPECT_EQ(metadata.size(), 2u);
+    for (const auto& m : metadata) {
+        EXPECT_NE(m.m_Name, "hidden1");
+    }
+}

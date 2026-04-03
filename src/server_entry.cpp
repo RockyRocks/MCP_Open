@@ -10,6 +10,8 @@
 #include <discovery/CompositeCommand.h>
 #include <skills/SkillEngine.h>
 #include <skills/SkillCommand.h>
+#include <skills/SkillToolAdapter.h>
+#include <skills/PluginLoader.h>
 #include <http/HttplibClient.h>
 #include <security/RateLimiter.h>
 #include <security/ApiKeyValidator.h>
@@ -54,9 +56,10 @@ int main(int argc, char** argv) {
     // LLM provider (LiteLLM proxy)
     auto llmProvider = std::make_shared<LiteLLMProvider>(httpClient, config);
 
-    // Skills engine
+    // Skills engine — load JSON skills then plugin skills
     auto skillEngine = std::make_shared<SkillEngine>();
     skillEngine->LoadFromDirectory(config.GetSkillsDirectory());
+    PluginLoader::LoadIntoEngine(config.GetPluginsDirectory(), *skillEngine);
 
     // MCP server discovery
     auto mcpRegistry = std::make_shared<McpServerRegistry>();
@@ -66,14 +69,30 @@ int main(int argc, char** argv) {
         Logger::GetInstance().Log(std::string("MCP servers config: ") + e.what());
     }
 
-    // Command registry
+    // Command registry — unified flat tool list
     auto commandRegistry = std::make_shared<CommandRegistry>();
+
+    // Built-in defaults
     commandRegistry->RegisterCommand("echo", CreateEchoCommand());
     commandRegistry->RegisterCommand("llm", std::make_shared<LLMCommand>(llmProvider));
-    commandRegistry->RegisterCommand("skill", std::make_shared<SkillCommand>(skillEngine, llmProvider));
     commandRegistry->RegisterCommand("remote", std::make_shared<CompositeCommand>(mcpRegistry, httpClient));
 
-    Logger::GetInstance().Log("Registered commands: echo, llm, skill, remote");
+    // "skill" meta-tool kept for backward compat but marked hidden
+    commandRegistry->RegisterCommand("skill", std::make_shared<SkillCommand>(skillEngine, llmProvider));
+
+    // Promote every skill (JSON + plugin) as its own first-class tool
+    for (const auto& name : skillEngine->ListSkills()) {
+        auto def = skillEngine->Resolve(name);
+        if (!def.has_value()) continue;
+        // Detect source: plugin skills have no default_model (set by PluginLoader)
+        // Use JsonSkill as default; PluginLoader-loaded skills are indistinguishable here
+        // so we tag all promoted skills as JsonSkill (ToolSource has no runtime effect).
+        commandRegistry->RegisterCommand(name,
+            std::make_shared<SkillToolAdapter>(*def, llmProvider));
+    }
+
+    Logger::GetInstance().Log("Registered commands: echo, llm, remote, skill(hidden), +"
+        + std::to_string(skillEngine->ListSkills().size()) + " skill tools");
 
     // stdio transport mode (MCP protocol over JSON-RPC 2.0)
     if (stdioMode) {
@@ -128,9 +147,19 @@ int main(int argc, char** argv) {
         });
 
     server->AddRoute("GET", "/skills",
-        [skillEngine](const std::string&, const std::string&,
-                       std::function<void(int, const std::string&)> respond) {
-            respond(200, skillEngine->ListSkillsJson().dump());
+        [commandRegistry](const std::string&, const std::string&,
+                           std::function<void(int, const std::string&)> respond) {
+            // Return all skill tools (JsonSkill + Plugin) from the registry
+            nlohmann::json arr = nlohmann::json::array();
+            for (const auto& meta : commandRegistry->ListToolMetadata()) {
+                if (meta.m_Source == ToolSource::BuiltIn) continue;
+                arr.push_back({
+                    {"name", meta.m_Name},
+                    {"description", meta.m_Description},
+                    {"inputSchema", meta.m_InputSchema}
+                });
+            }
+            respond(200, arr.dump());
         });
 
     server->AddRoute("GET", "/servers",

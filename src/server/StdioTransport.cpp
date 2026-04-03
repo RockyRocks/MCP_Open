@@ -127,6 +127,9 @@ nlohmann::json StdioTransport::Dispatch(const nlohmann::json& message) {
     if (method == "tools/call") {
         return HandleToolsCall(params, id);
     }
+    if (method == "tools/call_batch") {
+        return HandleToolsCallBatch(params, id);
+    }
     if (method == "prompts/list") {
         return HandlePromptsList(id);
     }
@@ -230,6 +233,116 @@ nlohmann::json StdioTransport::HandleToolsCall(
     } catch (const std::exception& e) {
         return MakeError(id, JSONRPC_INTERNAL_ERROR, e.what());
     }
+}
+
+nlohmann::json StdioTransport::HandleToolsCallBatch(
+    const nlohmann::json& params, const nlohmann::json& id) {
+
+    if (!params.contains("calls") || !params["calls"].is_array()) {
+        return MakeError(id, JSONRPC_INVALID_PARAMS,
+                         "Missing required parameter: calls (array)");
+    }
+
+    const auto& calls = params["calls"];
+    if (calls.empty()) {
+        return MakeResponse(id, {{"results", nlohmann::json::array()}});
+    }
+
+    // Phase 1: resolve all commands and launch futures in parallel
+    struct PendingCall {
+        std::string name;
+        std::future<nlohmann::json> future;
+        bool isError = false;
+        std::string errorMsg;
+    };
+
+    std::vector<PendingCall> pending;
+    pending.reserve(calls.size());
+
+    for (const auto& call : calls) {
+        if (!call.contains("name") || !call["name"].is_string()) {
+            PendingCall pc;
+            pc.name = "<unknown>";
+            pc.isError = true;
+            pc.errorMsg = "Each call must have a string 'name' field";
+            pending.push_back(std::move(pc));
+            continue;
+        }
+
+        std::string toolName = call["name"].get<std::string>();
+        auto arguments = call.value("arguments", nlohmann::json::object());
+
+        auto cmd = m_Registry->Resolve(toolName);
+        if (!cmd) {
+            PendingCall pc;
+            pc.name = toolName;
+            pc.isError = true;
+            pc.errorMsg = "Unknown tool: " + toolName;
+            pending.push_back(std::move(pc));
+            continue;
+        }
+
+        auto meta = cmd->GetMetadata();
+        if (!meta.m_DefaultModel.empty() && !arguments.contains("model")) {
+            arguments["model"] = meta.m_DefaultModel;
+        }
+        if (!meta.m_DefaultParameters.is_null() && !meta.m_DefaultParameters.empty()
+            && !arguments.contains("parameters")) {
+            arguments["parameters"] = meta.m_DefaultParameters;
+        }
+
+        nlohmann::json internalRequest = {
+            {"command", toolName},
+            {"payload", arguments}
+        };
+
+        PendingCall pc;
+        pc.name = toolName;
+        try {
+            pc.future = cmd->ExecuteAsync(internalRequest);
+        } catch (const std::exception& e) {
+            pc.isError = true;
+            pc.errorMsg = e.what();
+        }
+        pending.push_back(std::move(pc));
+    }
+
+    // Phase 2: collect all results (futures run in parallel during phase 1)
+    nlohmann::json results = nlohmann::json::array();
+    for (auto& pc : pending) {
+        if (pc.isError) {
+            results.push_back({
+                {"name", pc.name},
+                {"isError", true},
+                {"content", nlohmann::json::array({
+                    {{"type", "text"}, {"text", pc.errorMsg}}
+                })}
+            });
+            continue;
+        }
+
+        try {
+            nlohmann::json result = pc.future.get();
+            bool isError = result.value("status", "ok") == "error";
+            results.push_back({
+                {"name", pc.name},
+                {"isError", isError},
+                {"content", nlohmann::json::array({
+                    {{"type", "text"}, {"text", result.dump()}}
+                })}
+            });
+        } catch (const std::exception& e) {
+            results.push_back({
+                {"name", pc.name},
+                {"isError", true},
+                {"content", nlohmann::json::array({
+                    {{"type", "text"}, {"text", std::string(e.what())}}
+                })}
+            });
+        }
+    }
+
+    return MakeResponse(id, {{"results", results}});
 }
 
 nlohmann::json StdioTransport::HandlePromptsList(const nlohmann::json& id) {

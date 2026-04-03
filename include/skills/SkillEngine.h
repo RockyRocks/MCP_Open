@@ -15,6 +15,10 @@ public:
     std::string RenderPrompt(const SkillDefinition& skill,
                              const nlohmann::json& variables) const;
 
+    /// Static variant — usable without an engine instance (e.g. SkillToolAdapter).
+    static std::string StaticRenderPrompt(const SkillDefinition& skill,
+                                          const nlohmann::json& variables);
+
 private:
     std::unordered_map<std::string, SkillDefinition> m_Skills;
     static std::string Interpolate(const std::string& templ, const nlohmann::json& vars);

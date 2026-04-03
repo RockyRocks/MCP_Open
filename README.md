@@ -401,7 +401,161 @@ curl http://localhost:4000/v1/chat/completions \
   }'
 ```
 
-All models in `litellm_config.yaml` (`claude-sonnet`, `gpt-4o`, `gemini-pro`, …) automatically have access to the `echo`, `llm`, `skill`, and `remote` tools.
+All models in `litellm_config.yaml` (`claude-sonnet`, `gpt-4o`, `gemini-pro`, …) automatically have access to all registered tools including promoted skill and plugin tools.
+
+---
+
+## Plugins
+
+Plugins extend the server with additional tools without modifying C++ code. Each plugin is a directory containing a `plugin.json` manifest and one or more skills defined as `SKILL.md` files. At startup the server promotes every skill into its own first-class MCP tool, so any LLM can discover and call them directly via `tools/list`.
+
+### Plugin Directory Layout
+
+```text
+plugins/
+└── my_plugin/
+    ├── plugin.json          # Plugin metadata
+    └── skills/
+        └── code_review/
+            ├── SKILL.md     # Required — defines the tool
+            ├── scripts/     # Optional — executable helpers
+            ├── references/  # Optional — docs loaded into context
+            └── assets/      # Optional — templates / static files
+```
+
+### `SKILL.md` Format
+
+```markdown
+---
+name: code_review
+description: Review code for bugs, style issues, and improvements
+variables:
+  - code
+  - language
+---
+
+Review the following {{language}} code for bugs, style issues, and improvements:
+
+\`\`\`{{language}}
+{{code}}
+\`\`\`
+
+Provide structured feedback: 1) Bugs, 2) Style, 3) Improvements.
+```
+
+**Frontmatter fields:**
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `name` | No (falls back to dir name) | Tool name registered in MCP |
+| `description` | Yes | Shown to LLMs in `tools/list` — make it specific |
+| `variables` | No | List of `{{placeholder}}` names that callers must supply |
+
+The Markdown body after the closing `---` becomes the `prompt_template`. Use `{{variable_name}}` placeholders — they are interpolated at call time and sanitized against injection.
+
+### `plugin.json` Format
+
+```json
+{
+  "name": "my-plugin",
+  "description": "Short description of what this plugin provides",
+  "author": { "name": "Your Name" },
+  "keywords": ["tag1", "tag2"]
+}
+```
+
+### Adding a Plugin
+
+1. Create the plugin directory structure under `plugins/` (relative to the server working directory or the path set in `config/mcp_config.json`).
+
+2. Write your `SKILL.md` files following the format above.
+
+3. Restart the server — plugins are loaded at startup. The new tools appear immediately in `tools/list`:
+
+```bash
+# Verify via REST
+curl http://localhost:8080/skills
+
+# Verify via MCP stdio
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | ./build/mcp_server --stdio
+```
+
+1. Optionally configure the plugins directory in `config/mcp_config.json`:
+
+```json
+{
+  "plugins": {
+    "directory": "/absolute/path/to/plugins"
+  }
+}
+```
+
+Or set the path via the `plugins.directory` key for a non-default location.
+
+### Calling a Plugin Tool
+
+Once loaded, each skill is a first-class MCP tool. No skill-layer knowledge is required:
+
+```bash
+# tools/call — direct, works with any LLM
+echo '{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "code_review",
+    "arguments": {
+      "code": "int x = foo();",
+      "language": "cpp"
+    }
+  }
+}' | ./build/mcp_server --stdio
+```
+
+### Parallel Skill Execution
+
+When using the stdio transport (or any async server), multiple skills can execute in parallel using the `tools/call_batch` extension:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call_batch",
+  "params": {
+    "calls": [
+      {
+        "name": "code_review",
+        "arguments": { "code": "int x = foo();", "language": "cpp" }
+      },
+      {
+        "name": "summarize",
+        "arguments": { "input": "Long article text..." }
+      }
+    ]
+  }
+}
+```
+
+All calls are launched concurrently (`std::async`) before any result is collected, so total latency ≈ max(individual latencies) rather than their sum.
+
+**Response format:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "results": [
+      { "name": "code_review", "isError": false, "content": [{ "type": "text", "text": "..." }] },
+      { "name": "summarize",   "isError": false, "content": [{ "type": "text", "text": "..." }] }
+    ]
+  }
+}
+```
+
+Individual failures are isolated — a failed call sets `"isError": true` for that entry without cancelling the others.
+
+> **uWebSockets note:** When built with `-DUSE_UWS=ON`, each HTTP POST to `/mcp` is already handled asynchronously at the connection level (multiple clients run concurrently). `tools/call_batch` provides the additional capability of running multiple skills in parallel within a single request.
 
 ---
 

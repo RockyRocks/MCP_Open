@@ -18,6 +18,7 @@ public:
     bool IsAuthEnabled() const;
     std::string GetAuthApiKey() const;
     std::string GetSkillsDirectory() const;
+    std::string GetPluginsDirectory() const;
     std::string GetMcpServersConfigPath() const;
     const nlohmann::json& GetRaw() const;
 

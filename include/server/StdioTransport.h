@@ -43,6 +43,8 @@ private:
     nlohmann::json HandleInitialize(const nlohmann::json& params, const nlohmann::json& id);
     nlohmann::json HandleToolsList(const nlohmann::json& id);
     nlohmann::json HandleToolsCall(const nlohmann::json& params, const nlohmann::json& id);
+    /// MCP extension: execute multiple tool calls in parallel and return all results.
+    nlohmann::json HandleToolsCallBatch(const nlohmann::json& params, const nlohmann::json& id);
     nlohmann::json HandlePromptsList(const nlohmann::json& id);
     nlohmann::json HandlePromptsGet(const nlohmann::json& params, const nlohmann::json& id);
 

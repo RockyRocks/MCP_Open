@@ -35,6 +35,7 @@ std::vector<ToolMetadata> CommandRegistry::ListToolMetadata() const {
     result.reserve(m_Commands.size());
     for (const auto& [name, cmd] : m_Commands) {
         ToolMetadata meta = cmd->GetMetadata();
+        if (meta.m_Hidden) continue;
         if (meta.m_Name.empty()) {
             meta.m_Name = name;
         }

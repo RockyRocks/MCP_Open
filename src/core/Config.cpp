@@ -114,6 +114,13 @@ std::string Config::GetSkillsDirectory() const {
     return "skills";
 }
 
+std::string Config::GetPluginsDirectory() const {
+    if (m_Data.contains("plugins") && m_Data["plugins"].contains("directory")) {
+        return m_Data["plugins"]["directory"].get<std::string>();
+    }
+    return "plugins";
+}
+
 std::string Config::GetMcpServersConfigPath() const {
     if (m_Data.contains("discovery") && m_Data["discovery"].contains("servers_config")) {
         return m_Data["discovery"]["servers_config"].get<std::string>();

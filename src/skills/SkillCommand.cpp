@@ -83,20 +83,20 @@ std::future<nlohmann::json> SkillCommand::ExecuteAsync(const nlohmann::json& req
 }
 
 ToolMetadata SkillCommand::GetMetadata() const {
-    return {
-        "skill",
-        "Execute a skill prompt template with variables",
-        {
-            {"type", "object"},
-            {"properties", {
-                {"skill", {{"type", "string"}, {"description", "Skill name to execute"}}},
-                {"variables", {{"type", "object"}, {"description", "Template variables to interpolate"}}},
-                {"model", {{"type", "string"}, {"description", "Override the skill's default model"}}},
-                {"parameters", {{"type", "object"}, {"description", "Override the skill's default parameters"}}}
-            }},
-            {"required", nlohmann::json::array({"skill"})}
-        },
-        "",  // model selection is per-skill, not per-command
-        {}
+    ToolMetadata meta;
+    meta.m_Name = "skill";
+    meta.m_Description = "Execute a skill prompt template with variables (legacy meta-tool — prefer calling skill tools directly)";
+    meta.m_InputSchema = {
+        {"type", "object"},
+        {"properties", {
+            {"skill", {{"type", "string"}, {"description", "Skill name to execute"}}},
+            {"variables", {{"type", "object"}, {"description", "Template variables to interpolate"}}},
+            {"model", {{"type", "string"}, {"description", "Override the skill's default model"}}},
+            {"parameters", {{"type", "object"}, {"description", "Override the skill's default parameters"}}}
+        }},
+        {"required", nlohmann::json::array({"skill"})}
     };
+    meta.m_Source = ToolSource::BuiltIn;
+    meta.m_Hidden = true; // Skills are promoted as individual first-class tools
+    return meta;
 }

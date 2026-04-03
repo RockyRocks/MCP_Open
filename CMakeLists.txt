@@ -123,6 +123,8 @@ set(CORE_SOURCES
     src/discovery/CompositeCommand.cpp
     src/skills/SkillEngine.cpp
     src/skills/SkillCommand.cpp
+    src/skills/SkillToolAdapter.cpp
+    src/skills/PluginLoader.cpp
     src/http/HttplibClient.cpp
     src/security/RateLimiter.cpp
     src/security/ApiKeyValidator.cpp
@@ -223,6 +225,8 @@ set(TEST_SOURCES
     tests/RateLimiter_test.cpp
     tests/Config_test.cpp
     tests/SkillEngine_test.cpp
+    tests/SkillToolAdapter_test.cpp
+    tests/PluginLoader_test.cpp
     tests/McpServerRegistry_test.cpp
     tests/StdioTransport_test.cpp
 )

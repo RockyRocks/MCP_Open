@@ -90,13 +90,16 @@ nlohmann::json SkillEngine::ListSkillsJson() const {
 
 std::string SkillEngine::RenderPrompt(const SkillDefinition& skill,
                                        const nlohmann::json& variables) const {
-    // Validate required variables
+    return StaticRenderPrompt(skill, variables);
+}
+
+std::string SkillEngine::StaticRenderPrompt(const SkillDefinition& skill,
+                                             const nlohmann::json& variables) {
     for (const auto& required : skill.m_RequiredVariables) {
         if (!variables.contains(required)) {
             throw std::invalid_argument("Missing required variable: " + required);
         }
     }
-
     return Interpolate(skill.m_PromptTemplate, variables);
 }
 
