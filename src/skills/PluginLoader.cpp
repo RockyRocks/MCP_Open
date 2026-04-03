@@ -71,16 +71,19 @@ FrontmatterData ParseFrontmatter(const std::string& yaml) {
             continue;
         }
 
-        // List item under "variables:"
-        if (inVariables && line.size() >= 2 && line[0] == '-' && line[1] == ' ') {
-            std::string item = line.substr(2);
-            // Trim leading/trailing whitespace
-            auto start = item.find_first_not_of(' ');
-            auto end = item.find_last_not_of(' ');
-            if (start != std::string::npos) {
-                data.variables.push_back(item.substr(start, end - start + 1));
+        // List item under "variables:" — handle both "- item" and "  - item" (indented)
+        if (inVariables) {
+            auto dashPos = line.find_first_not_of(" \t");
+            if (dashPos != std::string::npos && line[dashPos] == '-'
+                && dashPos + 1 < line.size() && line[dashPos + 1] == ' ') {
+                std::string item = line.substr(dashPos + 2);
+                auto start = item.find_first_not_of(" \t");
+                auto end = item.find_last_not_of(" \t");
+                if (start != std::string::npos) {
+                    data.variables.push_back(item.substr(start, end - start + 1));
+                }
+                continue;
             }
-            continue;
         }
 
         inVariables = false;
