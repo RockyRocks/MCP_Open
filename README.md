@@ -90,7 +90,7 @@ graph TD
 
     subgraph Transport Layer
         HTTP[HTTP Server<br/>httplib / uWebSockets]
-        STDIO[Stdio Transport<br/>JSON-RPC 2.0]
+        STDIO[Stdio Transport<br/>JSON-RPC 2.0<br/>+ PushNotification]
     end
 
     subgraph Security Layer
@@ -102,18 +102,30 @@ graph TD
 
     subgraph Core
         PH[Protocol Handler]
-        CR[Command Registry]
+        CR[Command Registry<br/>unified flat tool list]
     end
 
-    subgraph Commands
-        ECHO[Echo Command]
-        LLM_CMD[LLM Command]
-        SKILL_CMD[Skill Command]
-        REMOTE_CMD[Remote / Composite Command]
+    subgraph Built-in Commands
+        ECHO[Echo Command<br/>BuiltIn]
+        LLM_CMD[LLM Command<br/>BuiltIn]
+        REMOTE_CMD[Remote / Composite Command<br/>BuiltIn]
+        SKILL_CMD[Skill Command<br/>BuiltIn — hidden]
+    end
+
+    subgraph Skill Tools
+        STA[SkillToolAdapter ×N<br/>JsonSkill / Plugin]
+        SE[Skill Engine]
+        PL[PluginLoader<br/>SKILL.md]
+    end
+
+    subgraph Native Plugin System
+        NPL[NativePluginLoader]
+        WATCH[Plugin Watcher<br/>background thread]
+        DLP[DlPlugin<br/>LoadLibrary / dlopen]
+        NPA[NativePluginAdapter ×N<br/>NativePlugin — fault-isolated]
     end
 
     subgraph Engines
-        SE[Skill Engine]
         LP[LiteLLM Provider]
         MSR[MCP Server Registry]
         HC[HTTP Client]
@@ -122,9 +134,11 @@ graph TD
     subgraph External
         LITELLM[(LiteLLM Proxy)]
         REMOTE_SRV[(Remote MCP Servers)]
+        PLUGIN_DL[(.dll / .so files<br/>in plugins/*/bin/)]
     end
 
     MAIN --> CFG
+    MAIN --> NPL
     CFG --> HTTP
     CFG --> STDIO
 
@@ -141,72 +155,141 @@ graph TD
     CR --> LLM_CMD
     CR --> SKILL_CMD
     CR --> REMOTE_CMD
+    CR --> STA
+    CR --> NPA
 
     LLM_CMD --> LP
     SKILL_CMD --> SE
     SKILL_CMD --> LP
+    STA --> SE
+    STA --> LP
+    SE --> PL
     REMOTE_CMD --> MSR
     REMOTE_CMD --> HC
+
+    NPL --> DLP
+    NPL --> WATCH
+    DLP --> PLUGIN_DL
+    DLP --> NPA
+    WATCH -->|new .dll/.so detected| NPL
+    NPL -->|notifications/tools/list_changed| STDIO
 
     LP --> LITELLM
     HC --> REMOTE_SRV
 ```
 
+**Key design decisions:**
+
+| Decision | Rationale |
+| -------- | --------- |
+| **Unified `CommandRegistry`** | Every tool — built-in, JSON skill, SKILL.md plugin, native DL plugin — is a flat `ICommandStrategy`. `tools/list` is a single filtered view. |
+| **`skill` meta-tool hidden** | Kept for backward compat but `m_Hidden = true` so it doesn't appear in `tools/list`. Skills are promoted as individual first-class tools. |
+| **C ABI for native plugins** | `extern "C"` is the only ABI that is stable across compilers, compiler versions, and standard libraries. Plugin authors compile with any toolchain. |
+| **`NativePluginAdapter` fault isolation** | Three protection layers: exception catch → `isError`, 30 s `wait_for` timeout, circuit breaker after 3 faults. A broken plugin cannot crash the host. |
+| **Runtime watcher + MCP notification** | The watcher polls `plugins/*/bin/` every 2 s. When a new DL appears it loads, registers tools, and pushes `notifications/tools/list_changed` to the stdio client so LLMs refresh their tool list without reconnecting. |
+
 ### Request Flow
 
 ```mermaid
 sequenceDiagram
-    participant Client
+    participant Client as LLM Client
     participant Transport as HTTP Server / Stdio
     participant PH as Protocol Handler
     participant Sec as Security Layer
     participant CR as Command Registry
-    participant Cmd as Command Strategy
+    participant Cmd as ICommandStrategy
     participant Ext as External Service
 
     Client->>Transport: Request (HTTP POST /mcp or stdin JSON-RPC)
     Transport->>PH: Forward request
-    PH->>Sec: Rate limit check
+    PH->>Sec: Rate limit + API key + input sanitization
     Sec-->>PH: OK
-    PH->>Sec: API key validation
-    Sec-->>PH: OK
-    PH->>Sec: Input sanitization
-    Sec-->>PH: OK
-    PH->>CR: Dispatch command
-    CR->>Cmd: executeAsync()
-    Cmd->>Ext: Call LiteLLM / Remote MCP (if needed)
-    Ext-->>Cmd: Response
-    Cmd-->>CR: Result
+    PH->>CR: Dispatch (tools/call or tools/call_batch)
+    CR->>Cmd: ExecuteAsync()
+
+    alt Built-in or SkillToolAdapter
+        Cmd->>Ext: Call LiteLLM / Remote MCP
+        Ext-->>Cmd: Response
+    else NativePluginAdapter
+        Note over Cmd: exception-isolated<br/>timeout-gated (30 s)<br/>circuit breaker (3 faults)
+        Cmd->>Ext: mcp_plugin_execute() via C ABI
+        Ext-->>Cmd: JSON result string
+    end
+
+    Cmd-->>CR: nlohmann::json result
     CR-->>PH: Result
     PH-->>Transport: JSON response
     Transport-->>Client: HTTP response / stdout JSON-RPC
+
+    Note over Transport,Client: Runtime hot-reload path
+    Transport-->>Client: notifications/tools/list_changed<br/>(pushed when watcher loads a new .dll/.so)
+```
+
+#### Parallel execution (`tools/call_batch`)
+
+All calls in a batch are launched as `std::async` futures before any `.get()` is called — true within-request parallelism. Total latency ≈ max(individual latencies).
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Transport
+    participant CR as Command Registry
+    participant A as Tool A (async)
+    participant B as Tool B (async)
+
+    Client->>Transport: tools/call_batch [{A}, {B}]
+    Transport->>CR: HandleToolsCallBatch
+    CR->>A: ExecuteAsync() — launch
+    CR->>B: ExecuteAsync() — launch
+    CR->>A: future.get()
+    CR->>B: future.get()
+    CR-->>Transport: [{resultA}, {resultB}]
+    Transport-->>Client: results array
 ```
 
 ### Directory Structure
 
 ```text
 MCP_Open/
-├── include/                # Public headers
-│   ├── commands/           #   Command registry & ICommandStrategy
-│   ├── core/               #   ProtocolHandler, Config, Logger, ThreadPool
-│   ├── discovery/          #   McpServerRegistry, CompositeCommand
-│   ├── http/               #   IHttpClient interface
-│   ├── llm/                #   ILLMProvider, LiteLLMProvider, LLMCommand
-│   ├── security/           #   RateLimiter, ApiKeyValidator, SecurityHeaders
-│   ├── server/             #   IServer, HttplibServer, UwsServer, StdioTransport
-│   ├── skills/             #   SkillEngine, SkillCommand
-│   └── validation/         #   InputSanitizer, JsonSchemaValidator
-├── src/                    # Implementation files (mirrors include/)
-├── capi/                   # C API for FFI / P/Invoke
+├── include/                  # Public headers
+│   ├── commands/             #   CommandRegistry, ICommandStrategy, ToolMetadata
+│   │                         #     ToolSource: BuiltIn | JsonSkill | Plugin | NativePlugin
+│   ├── core/                 #   ProtocolHandler, Config, Logger, ThreadPool
+│   ├── discovery/            #   McpServerRegistry, CompositeCommand
+│   ├── http/                 #   IHttpClient
+│   ├── llm/                  #   ILLMProvider, LiteLLMProvider, LLMCommand
+│   ├── plugins/              #   Native plugin system (NEW)
+│   │   ├── PluginABI.h       #     Stable extern "C" ABI contract (plugin authors include this)
+│   │   ├── IPlugin.h         #     Abstract C++ interface (mockable in tests)
+│   │   ├── DlPlugin.h        #     Concrete LoadLibrary/dlopen loader
+│   │   ├── NativePluginAdapter.h  # ICommandStrategy wrapper with fault isolation
+│   │   └── NativePluginLoader.h  # Directory scanner, watcher, notify callback
+│   ├── security/             #   RateLimiter, ApiKeyValidator, SecurityHeaders
+│   ├── server/               #   IServer, HttplibServer, UwsServer, StdioTransport
+│   ├── skills/               #   SkillEngine, SkillCommand, SkillToolAdapter, PluginLoader
+│   └── validation/           #   InputSanitizer, JsonSchemaValidator
+├── src/                      # Implementation files (mirrors include/)
+│   ├── plugins/              #   DlPlugin.cpp, NativePluginAdapter.cpp, NativePluginLoader.cpp
+│   └── ...
+├── plugins/                  # Plugin directory (loaded at runtime)
+│   └── example_plugin/       #   Reference native plugin
+│       ├── bin/              #     Built output: example_plugin.dll / libexample_plugin.so
+│       ├── src/
+│       │   └── example_plugin.cpp   # Full source: ping + base64_encode tools
+│       └── CMakeLists.txt    #     Standalone or in-tree build
+├── skills/                   # JSON skill definitions (loaded at startup)
+│   ├── code_review.json
+│   ├── summarize.json
+│   └── translate.json
+├── capi/                     # C API for FFI / P/Invoke
 │   ├── include/mcp_capi.h
 │   └── src/mcp_capi.cpp
-├── csharp/                 # C# wrapper (McpClient.csproj)
-├── config/                 # Example configuration files
-├── skills/                 # Skill definition JSONs
-├── tests/                  # Unit tests (GTest / Catch2)
-├── litellm/                # LiteLLM proxy launcher & config
-├── CMakeLists.txt          # Build system
-└── BUILD.md                # Detailed build instructions
+├── csharp/                   # C# wrapper (McpClient.csproj)
+├── config/                   # Example configuration files
+├── tests/                    # Unit tests (GTest / Catch2) — 117 tests
+├── litellm/                  # LiteLLM proxy launcher & config
+├── CMakeLists.txt            # Build system
+└── BUILD.md                  # Detailed build instructions
 ```
 
 ---
