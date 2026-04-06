@@ -12,6 +12,7 @@
 #include <skills/SkillCommand.h>
 #include <skills/SkillToolAdapter.h>
 #include <skills/PluginLoader.h>
+#include <plugins/NativePluginLoader.h>
 #include <http/HttplibClient.h>
 #include <security/RateLimiter.h>
 #include <security/ApiKeyValidator.h>
@@ -56,7 +57,7 @@ int main(int argc, char** argv) {
     // LLM provider (LiteLLM proxy)
     auto llmProvider = std::make_shared<LiteLLMProvider>(httpClient, config);
 
-    // Skills engine — load JSON skills then plugin skills
+    // Skills engine — load JSON skills then SKILL.md plugin skills
     auto skillEngine = std::make_shared<SkillEngine>();
     skillEngine->LoadFromDirectory(config.GetSkillsDirectory());
     PluginLoader::LoadIntoEngine(config.GetPluginsDirectory(), *skillEngine);
@@ -91,13 +92,38 @@ int main(int argc, char** argv) {
             std::make_shared<SkillToolAdapter>(*def, llmProvider));
     }
 
+    // Native plugin tools — load .dll/.so plugins and register each tool
+    NativePluginLoader::LoadAll(config.GetPluginsDirectory(), *commandRegistry);
+
     Logger::GetInstance().Log("Registered commands: echo, llm, remote, skill(hidden), +"
         + std::to_string(skillEngine->ListSkills().size()) + " skill tools");
 
     // stdio transport mode (MCP protocol over JSON-RPC 2.0)
     if (stdioMode) {
-        StdioTransport transport(commandRegistry, skillEngine, mcpRegistry);
-        transport.Run();
+        // Use a shared_ptr so the watcher lambda can capture it safely
+        auto transportPtr = std::make_shared<StdioTransport>(
+            commandRegistry, skillEngine, mcpRegistry);
+
+        // When a new plugin is hot-loaded at runtime, push a standard MCP
+        // notifications/tools/list_changed event so the LLM client refreshes
+        // its tool list without needing to poll.
+        NativePluginLoader::SetNotifyCallback(
+            [transportPtr](const nlohmann::json& payload) {
+                nlohmann::json notification = {
+                    {"jsonrpc", "2.0"},
+                    {"method",  "notifications/tools/list_changed"},
+                    {"params",  payload}
+                };
+                transportPtr->PushNotification(notification);
+            });
+
+        NativePluginLoader::StartWatcher(config.GetPluginsDirectory(),
+                                         commandRegistry);
+
+        transportPtr->Run();
+
+        NativePluginLoader::StopWatcher();
+        NativePluginLoader::SetNotifyCallback(nullptr);
         return 0;
     }
 
@@ -175,9 +201,18 @@ int main(int argc, char** argv) {
             respond(200, cmds.dump());
         });
 
+    // In HTTP mode the notification goes to the log (Logger observer).
+    // Clients can poll GET /commands to detect newly registered tools.
+    NativePluginLoader::SetNotifyCallback([](const nlohmann::json& payload) {
+        Logger::GetInstance().Log("[plugin_loaded] " + payload.dump());
+    });
+    NativePluginLoader::StartWatcher(config.GetPluginsDirectory(), commandRegistry);
+
     int port = config.GetServerPort();
     Logger::GetInstance().Log("Starting server on port " + std::to_string(port));
     server->Listen("0.0.0.0", port);
 
+    NativePluginLoader::StopWatcher();
+    NativePluginLoader::SetNotifyCallback(nullptr);
     return 0;
 }

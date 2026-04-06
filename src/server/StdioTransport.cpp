@@ -103,6 +103,10 @@ void StdioTransport::Stop() {
     m_Running = false;
 }
 
+void StdioTransport::PushNotification(const nlohmann::json& notification) {
+    SendMessage(notification);
+}
+
 nlohmann::json StdioTransport::Dispatch(const nlohmann::json& message) {
     std::string method = message["method"].get<std::string>();
     auto id = message.contains("id") ? message["id"] : nullptr;

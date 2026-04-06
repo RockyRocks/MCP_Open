@@ -5,9 +5,10 @@
 
 /// Where a tool came from. Used by REST endpoints to filter by category.
 enum class ToolSource {
-    BuiltIn,   ///< Compiled-in command (echo, llm, remote)
-    JsonSkill, ///< Promoted from a skills/*.json file
-    Plugin,    ///< Promoted from a plugins/*/skills/*/SKILL.md file
+    BuiltIn,      ///< Compiled-in command (echo, llm, remote)
+    JsonSkill,    ///< Promoted from a skills/*.json file
+    Plugin,       ///< Promoted from a plugins/*/skills/*/SKILL.md file
+    NativePlugin, ///< Loaded from a native shared library (.dll / .so)
 };
 
 /// Unified metadata for MCP tools. Each command can self-describe by

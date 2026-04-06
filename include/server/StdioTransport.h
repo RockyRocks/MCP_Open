@@ -35,6 +35,11 @@ public:
     /// Signal the transport to stop after the current message.
     void Stop();
 
+    /// Push an unsolicited JSON-RPC notification to the output stream.
+    /// Thread-safe. Called by NativePluginLoader when a plugin loads at runtime
+    /// so that connected LLM clients receive notifications/tools/list_changed.
+    void PushNotification(const nlohmann::json& notification);
+
 private:
     // JSON-RPC dispatch
     nlohmann::json Dispatch(const nlohmann::json& message);

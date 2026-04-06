@@ -125,6 +125,9 @@ set(CORE_SOURCES
     src/skills/SkillCommand.cpp
     src/skills/SkillToolAdapter.cpp
     src/skills/PluginLoader.cpp
+    src/plugins/DlPlugin.cpp
+    src/plugins/NativePluginAdapter.cpp
+    src/plugins/NativePluginLoader.cpp
     src/http/HttplibClient.cpp
     src/security/RateLimiter.cpp
     src/security/ApiKeyValidator.cpp
@@ -151,6 +154,16 @@ target_link_libraries(core PUBLIC
 if(USE_UWS)
   target_link_libraries(core PUBLIC uwebsockets)
   target_compile_definitions(core PUBLIC USE_UWS=1)
+endif()
+
+# Native plugin DL loading
+if(WIN32)
+  # LoadLibrary / GetProcAddress are in kernel32, always linked automatically.
+  # No extra target needed.
+elseif(APPLE)
+  # dlopen is in libSystem on macOS — no extra link needed.
+else()
+  target_link_libraries(core PUBLIC dl)
 endif()
 
 # std::filesystem requires explicit linking on GCC < 9 and Clang < 9
@@ -229,6 +242,7 @@ set(TEST_SOURCES
     tests/PluginLoader_test.cpp
     tests/McpServerRegistry_test.cpp
     tests/StdioTransport_test.cpp
+    tests/NativePlugin_test.cpp
 )
 
 if(TEST_FRAMEWORK STREQUAL "GTest")
@@ -239,4 +253,23 @@ else()
   add_executable(unit_tests ${TEST_SOURCES})
   target_link_libraries(unit_tests PRIVATE core Catch2::Catch2WithMain)
   add_test(NAME unit_tests COMMAND unit_tests)
+endif()
+
+# ------------------------------------------------------------------------------
+# Example native plugin (optional — builds into plugins/example_plugin/bin/)
+# ------------------------------------------------------------------------------
+option(BUILD_EXAMPLE_PLUGIN "Build the example native plugin shared library" ON)
+if(BUILD_EXAMPLE_PLUGIN)
+  add_library(example_plugin SHARED
+    plugins/example_plugin/src/example_plugin.cpp
+  )
+  target_include_directories(example_plugin PRIVATE ${PROJECT_SOURCE_DIR}/include)
+  set_target_properties(example_plugin PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/example_plugin/bin"
+    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/example_plugin/bin"
+  )
+  if(CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT MSVC)
+    target_compile_options(example_plugin PRIVATE -fvisibility=hidden)
+  endif()
+  message(STATUS "Building example_plugin -> plugins/example_plugin/bin/")
 endif()
