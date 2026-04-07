@@ -41,15 +41,15 @@ std::future<nlohmann::json> NativePluginAdapter::ExecuteAsync(
         std::thread([this, request, promise]() mutable {
             try {
                 promise->set_value(m_Plugin->Execute(m_ToolName, request));
-            } catch (const std::exception& ex) {
-                try {
-                    promise->set_exception(std::make_exception_ptr(ex));
-                } catch (...) {}
             } catch (...) {
+                // Use current_exception() to capture the live exception with
+                // its full dynamic type and message intact. Catching by
+                // reference and then calling std::make_exception_ptr(ex) would
+                // slice the exception to the base std::exception type, losing
+                // the message on GCC/Clang where only derived classes own the
+                // message storage.
                 try {
-                    promise->set_exception(
-                        std::make_exception_ptr(
-                            std::runtime_error("unknown exception")));
+                    promise->set_exception(std::current_exception());
                 } catch (...) {}
             }
         }).detach();
