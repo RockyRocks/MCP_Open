@@ -1,6 +1,8 @@
 #include <skills/SkillToolAdapter.h>
 #include <skills/SkillEngine.h>
 #include <core/Logger.h>
+#include <algorithm>  // std::remove
+#include <cstdio>     // popen/_popen, fgets, pclose/_pclose
 
 SkillToolAdapter::SkillToolAdapter(SkillDefinition def,
                                    std::shared_ptr<ILLMProvider> provider,
@@ -15,6 +17,48 @@ std::future<nlohmann::json> SkillToolAdapter::ExecuteAsync(const nlohmann::json&
         // payload IS the variables (StdioTransport injects arguments directly as payload)
         nlohmann::json variables = request.value("payload", nlohmann::json::object());
 
+        // ---- Command skill: execute shell command, return stdout ----
+        if (def.m_Type == SkillType::Command) {
+            // Reuse StaticRenderPrompt for {{variable}} interpolation + required-var validation
+            SkillDefinition cmdDef = def;
+            cmdDef.m_PromptTemplate = def.m_CommandTemplate;
+            std::string cmd;
+            try {
+                cmd = SkillEngine::StaticRenderPrompt(cmdDef, variables);
+            } catch (const std::invalid_argument& e) {
+                return {{"status", "error"}, {"error", e.what()}};
+            }
+            // Strip shell metacharacters that could enable injection via popen
+            const std::string kStrip = "|&;<>";
+            for (char c : kStrip)
+                cmd.erase(std::remove(cmd.begin(), cmd.end(), c), cmd.end());
+
+#ifdef _WIN32
+            FILE* pipe = _popen(cmd.c_str(), "r");
+#else
+            FILE* pipe = popen(cmd.c_str(), "r");
+#endif
+            if (!pipe)
+                return {{"status", "error"}, {"error", "Failed to execute: " + cmd}};
+
+            std::string output;
+            char buf[4096];
+            while (fgets(buf, sizeof(buf), pipe)) output += buf;
+
+#ifdef _WIN32
+            int rc = _pclose(pipe);
+#else
+            int rc = pclose(pipe);
+#endif
+            return nlohmann::json{
+                {"status",    "ok"},
+                {"skill",     def.m_Name},
+                {"content",   output.empty() ? "(no results)" : output},
+                {"exit_code", rc}
+            };
+        }
+
+        // ---- LLM skill: render prompt and send to provider ----
         std::string prompt;
         try {
             prompt = SkillEngine::StaticRenderPrompt(def, variables);
@@ -92,7 +136,15 @@ ToolMetadata SkillToolAdapter::GetMetadata() const {
 
     ToolMetadata meta;
     meta.m_Name = m_Def.m_Name;
-    meta.m_Description = m_Def.m_Description;
+    // For command skills, rules have no LLM system-prompt path — inject them
+    // into the description so the LLM sees them in tools/list.
+    std::string desc = m_Def.m_Description;
+    if (m_Def.m_Type == SkillType::Command && !m_Def.m_Rules.empty()) {
+        desc += "\n\nUsage rules:";
+        for (size_t i = 0; i < m_Def.m_Rules.size(); ++i)
+            desc += "\n" + std::to_string(i + 1) + ". " + m_Def.m_Rules[i];
+    }
+    meta.m_Description = std::move(desc);
     meta.m_InputSchema = std::move(schema);
     meta.m_DefaultModel = m_Def.m_DefaultModel;
     meta.m_DefaultParameters = m_Def.m_DefaultParameters;

@@ -221,6 +221,104 @@ TEST_F(PluginLoaderFsTest, SkipEntriesWithoutSkillMd) {
     EXPECT_TRUE(engine.ListSkills().empty());
 }
 
+// ---------------------------------------------------------------------------
+// Command skill tests (ParseSkillMd)
+// ---------------------------------------------------------------------------
+
+TEST(PluginLoaderTest, CommandSkill_ParsedFromSkillMd) {
+    std::string content = R"(---
+name: cmd_skill
+description: A command skill
+type: command
+command_template: echo {{msg}}
+variables:
+  - msg
+---
+
+Documentation body.
+)";
+    auto skill = PluginLoader::ParseSkillMd(content, "cmd_skill");
+    EXPECT_EQ(skill.m_Type, SkillType::Command);
+    EXPECT_EQ(skill.m_CommandTemplate, "echo {{msg}}");
+    ASSERT_EQ(skill.m_RequiredVariables.size(), 1u);
+    EXPECT_EQ(skill.m_RequiredVariables[0], "msg");
+}
+
+TEST(PluginLoaderTest, CommandSkill_PluginDirSubstituted) {
+    std::string content = R"(---
+name: es_skill
+description: ES search
+type: command
+command_template: ${PLUGIN_DIR}/scripts/es.exe -n 50 "{{query}}"
+variables:
+  - query
+---
+)";
+    auto skill = PluginLoader::ParseSkillMd(content, "es_skill", "C:\\plugins\\everything-search");
+    EXPECT_EQ(skill.m_CommandTemplate,
+              "C:\\plugins\\everything-search/scripts/es.exe -n 50 \"{{query}}\"");
+}
+
+TEST(PluginLoaderTest, CommandSkill_RulesLoadedFromFrontmatter) {
+    std::string content = R"(---
+name: rule_skill
+description: Has rules
+type: command
+command_template: echo {{x}}
+variables:
+  - x
+rules:
+  - Rule one
+  - Rule two
+  - Rule three
+---
+)";
+    auto skill = PluginLoader::ParseSkillMd(content);
+    ASSERT_EQ(skill.m_Rules.size(), 3u);
+    EXPECT_EQ(skill.m_Rules[0], "Rule one");
+    EXPECT_EQ(skill.m_Rules[1], "Rule two");
+    EXPECT_EQ(skill.m_Rules[2], "Rule three");
+}
+
+TEST(PluginLoaderTest, CommandSkill_LlmSkillUnchanged) {
+    // No "type:" field — must default to LLM for backward compat
+    std::string content = R"(---
+name: llm_skill
+description: An LLM skill
+variables:
+  - input
+---
+
+Do {{input}}.
+)";
+    auto skill = PluginLoader::ParseSkillMd(content);
+    EXPECT_EQ(skill.m_Type, SkillType::LLM);
+    EXPECT_TRUE(skill.m_CommandTemplate.empty());
+}
+
+TEST(PluginLoaderTest, CommandSkill_VariablesAndRulesCoexist) {
+    std::string content = R"(---
+name: mixed
+description: Has both variables and rules
+type: command
+command_template: run {{a}} {{b}}
+variables:
+  - a
+  - b
+rules:
+  - Always quote paths
+---
+)";
+    auto skill = PluginLoader::ParseSkillMd(content);
+    ASSERT_EQ(skill.m_RequiredVariables.size(), 2u);
+    ASSERT_EQ(skill.m_Rules.size(), 1u);
+    EXPECT_EQ(skill.m_Rules[0], "Always quote paths");
+}
+
+// ---------------------------------------------------------------------------
+// Command skill filesystem integration test
+// ---------------------------------------------------------------------------
+
 TEST_F(PluginLoaderFsTest, LoadedSkillCanBeRendered) {
     CreateSkillMd("plugin", "render_test", R"(---
 name: render_test

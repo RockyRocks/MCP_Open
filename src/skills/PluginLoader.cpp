@@ -52,13 +52,16 @@ struct FrontmatterData {
     std::string name;
     std::string description;
     std::vector<std::string> variables;
+    std::string type;             // "llm" | "command"
+    std::string command_template;
+    std::vector<std::string> rules;
 };
 
 FrontmatterData ParseFrontmatter(const std::string& yaml) {
     FrontmatterData data;
     std::istringstream stream(yaml);
     std::string line;
-    bool inVariables = false;
+    std::string currentList; // tracks which YAML list we're inside: "variables" | "rules" | ""
 
     while (std::getline(stream, line)) {
         // Strip \r
@@ -67,12 +70,12 @@ FrontmatterData ParseFrontmatter(const std::string& yaml) {
         }
 
         if (line.empty()) {
-            inVariables = false;
+            currentList.clear();
             continue;
         }
 
-        // List item under "variables:" — handle both "- item" and "  - item" (indented)
-        if (inVariables) {
+        // List item under an active YAML list key — handle both "- item" and "  - item"
+        if (!currentList.empty()) {
             auto dashPos = line.find_first_not_of(" \t");
             if (dashPos != std::string::npos && line[dashPos] == '-'
                 && dashPos + 1 < line.size() && line[dashPos + 1] == ' ') {
@@ -80,13 +83,15 @@ FrontmatterData ParseFrontmatter(const std::string& yaml) {
                 auto start = item.find_first_not_of(" \t");
                 auto end = item.find_last_not_of(" \t");
                 if (start != std::string::npos) {
-                    data.variables.push_back(item.substr(start, end - start + 1));
+                    std::string trimmed = item.substr(start, end - start + 1);
+                    if (currentList == "variables") data.variables.push_back(trimmed);
+                    else if (currentList == "rules") data.rules.push_back(trimmed);
                 }
                 continue;
             }
         }
 
-        inVariables = false;
+        currentList.clear();
 
         auto colonPos = line.find(':');
         if (colonPos == std::string::npos) continue;
@@ -107,13 +112,12 @@ FrontmatterData ParseFrontmatter(const std::string& yaml) {
         key = trimEnd(trimStart(key));
         value = trimEnd(trimStart(value));
 
-        if (key == "name") {
-            data.name = value;
-        } else if (key == "description") {
-            data.description = value;
-        } else if (key == "variables") {
-            inVariables = true; // next lines with "- " are variables
-        }
+        if      (key == "name")             { data.name = value; }
+        else if (key == "description")      { data.description = value; }
+        else if (key == "type")             { data.type = value; }
+        else if (key == "command_template") { data.command_template = value; }
+        else if (key == "variables")        { currentList = "variables"; }
+        else if (key == "rules")            { currentList = "rules"; }
     }
 
     return data;
@@ -126,7 +130,8 @@ FrontmatterData ParseFrontmatter(const std::string& yaml) {
 // ---------------------------------------------------------------------------
 
 SkillDefinition PluginLoader::ParseSkillMd(const std::string& content,
-                                            const std::string& fallbackName) {
+                                            const std::string& fallbackName,
+                                            const std::string& pluginDir) {
     std::string frontmatter;
     std::string body;
 
@@ -137,12 +142,27 @@ SkillDefinition PluginLoader::ParseSkillMd(const std::string& content,
     auto fm = ParseFrontmatter(frontmatter);
 
     SkillDefinition skill;
-    skill.m_Name = fm.name.empty() ? fallbackName : fm.name;
-    skill.m_Description = fm.description;
-    skill.m_PromptTemplate = body;
+    skill.m_Name             = fm.name.empty() ? fallbackName : fm.name;
+    skill.m_Description      = fm.description;
+    skill.m_PromptTemplate   = body;          // LLM prompt or command docs
     skill.m_RequiredVariables = fm.variables;
+    skill.m_Rules            = fm.rules;
     // Plugins are LLM-agnostic — no default model baked in; resolved at runtime
     skill.m_DefaultModel = "";
+
+    // Command skill support
+    skill.m_Type = (fm.type == "command") ? SkillType::Command : SkillType::LLM;
+    if (skill.m_Type == SkillType::Command) {
+        std::string ct = fm.command_template;
+        // Substitute ${PLUGIN_DIR} with the actual plugin directory path
+        if (!pluginDir.empty()) {
+            const std::string marker = "${PLUGIN_DIR}";
+            size_t pos;
+            while ((pos = ct.find(marker)) != std::string::npos)
+                ct.replace(pos, marker.size(), pluginDir);
+        }
+        skill.m_CommandTemplate = std::move(ct);
+    }
 
     if (skill.m_Name.empty()) {
         throw std::runtime_error("SKILL.md has no 'name' field and no fallback name was given");
@@ -176,7 +196,7 @@ void PluginLoader::LoadIntoEngine(const std::string& pluginsDir, SkillEngine& en
 
             try {
                 std::string content = ReadFile(skillMdPath);
-                SkillDefinition skill = ParseSkillMd(content, fallbackName);
+                SkillDefinition skill = ParseSkillMd(content, fallbackName, pluginDir.string());
                 engine.LoadSkill(skill);
                 ++loaded;
                 Logger::GetInstance().Log("Loaded plugin skill: " + skill.m_Name

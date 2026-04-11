@@ -211,6 +211,78 @@ TEST(SkillToolAdapterTest, ExecuteAllowsParameterOverride) {
 }
 
 // ---------------------------------------------------------------------------
+// Command skill tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+SkillDefinition MakeCommandSkill(const std::string& name = "cmd_test",
+                                  const std::string& cmdTmpl = "echo {{msg}}",
+                                  const std::vector<std::string>& vars = {"msg"}) {
+    SkillDefinition s;
+    s.m_Name             = name;
+    s.m_Description      = "A command skill";
+    s.m_Type             = SkillType::Command;
+    s.m_CommandTemplate  = cmdTmpl;
+    s.m_RequiredVariables = vars;
+    return s;
+}
+
+} // anonymous namespace
+
+TEST(SkillToolAdapterTest, CommandSkill_ExecutesAndCapturesOutput) {
+    auto provider = std::make_shared<MockLLMProvider>();
+    SkillToolAdapter adapter(MakeCommandSkill(), provider);
+
+    nlohmann::json request = {{"payload", {{"msg", "hello_from_test"}}}};
+    auto result = adapter.ExecuteAsync(request).get();
+
+    EXPECT_EQ(result["status"], "ok");
+    EXPECT_EQ(result["skill"], "cmd_test");
+    // echo output should contain the argument
+    EXPECT_NE(result["content"].get<std::string>().find("hello_from_test"),
+              std::string::npos);
+}
+
+TEST(SkillToolAdapterTest, CommandSkill_MissingVariable_ReturnsError) {
+    auto provider = std::make_shared<MockLLMProvider>();
+    SkillToolAdapter adapter(MakeCommandSkill(), provider);
+
+    nlohmann::json request = {{"payload", nlohmann::json::object()}}; // no "msg"
+    auto result = adapter.ExecuteAsync(request).get();
+
+    EXPECT_EQ(result["status"], "error");
+    EXPECT_NE(result["error"].get<std::string>().find("msg"), std::string::npos);
+}
+
+TEST(SkillToolAdapterTest, CommandSkill_GetMetadata_InjectsRulesIntoDescription) {
+    auto provider = std::make_shared<MockLLMProvider>();
+    SkillDefinition skill = MakeCommandSkill();
+    skill.m_Description = "Base description.";
+    skill.m_Rules = {"Rule alpha", "Rule beta"};
+
+    SkillToolAdapter adapter(skill, provider);
+    auto meta = adapter.GetMetadata();
+
+    EXPECT_NE(meta.m_Description.find("Base description."), std::string::npos);
+    EXPECT_NE(meta.m_Description.find("Rule alpha"), std::string::npos);
+    EXPECT_NE(meta.m_Description.find("Rule beta"), std::string::npos);
+    EXPECT_NE(meta.m_Description.find("Usage rules:"), std::string::npos);
+}
+
+TEST(SkillToolAdapterTest, LlmSkill_GetMetadata_RulesNotInDescription) {
+    // LLM skills inject rules via system prompt, not description — description stays clean
+    auto provider = std::make_shared<MockLLMProvider>();
+    SkillDefinition skill = MakeSkill();
+    skill.m_Rules = {"Rule only for system prompt"};
+
+    SkillToolAdapter adapter(skill, provider);
+    auto meta = adapter.GetMetadata();
+
+    EXPECT_EQ(meta.m_Description.find("Rule only for system prompt"), std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
 // Parallel execution test
 // ---------------------------------------------------------------------------
 

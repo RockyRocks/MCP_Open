@@ -1,0 +1,7 @@
+{
+  "name": "everything-search",
+  "version": "1.0.0",
+  "description": "Instantly search for files using voidtools Everything Search (es.exe). Bundled es.exe binary — requires Everything daemon on the machine.",
+  "author": { "name": "MCP Server" },
+  "keywords": ["everything", "search", "files", "windows", "es.exe", "voidtools", "find"]
+}
