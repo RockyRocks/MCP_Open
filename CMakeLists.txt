@@ -245,6 +245,13 @@ set(TEST_SOURCES
     tests/NativePlugin_test.cpp
 )
 
+# Desktop notification plugin tests — cross-platform
+# NotificationBackend.cpp compiles cleanly on all platforms via #ifdef guards.
+list(APPEND TEST_SOURCES
+    tests/DesktopNotification_test.cpp
+    plugins/desktop_notification/src/NotificationBackend.cpp
+)
+
 if(TEST_FRAMEWORK STREQUAL "GTest")
   add_executable(unit_tests ${TEST_SOURCES})
   target_link_libraries(unit_tests PRIVATE core gtest_main)
@@ -253,6 +260,41 @@ else()
   add_executable(unit_tests ${TEST_SOURCES})
   target_link_libraries(unit_tests PRIVATE core Catch2::Catch2WithMain)
   add_test(NAME unit_tests COMMAND unit_tests)
+endif()
+
+# Include path for desktop_notification backend (needed on all platforms)
+target_include_directories(unit_tests PRIVATE
+    "${PROJECT_SOURCE_DIR}/plugins/desktop_notification/src"
+)
+# runtimeobject.lib only needed on Windows (WRL COM for WinRT)
+if(WIN32)
+  target_link_libraries(unit_tests PRIVATE runtimeobject)
+endif()
+
+# ------------------------------------------------------------------------------
+# Desktop notification plugin (all platforms — builds into plugins/desktop_notification/bin/)
+# ------------------------------------------------------------------------------
+option(BUILD_DESKTOP_NOTIFICATION_PLUGIN "Build the desktop_notification native plugin" ON)
+if(BUILD_DESKTOP_NOTIFICATION_PLUGIN)
+  add_library(desktop_notification SHARED
+    plugins/desktop_notification/src/desktop_notification.cpp
+    plugins/desktop_notification/src/NotificationBackend.cpp
+  )
+  target_include_directories(desktop_notification PRIVATE
+    "${PROJECT_SOURCE_DIR}/include"
+    "${PROJECT_SOURCE_DIR}/plugins/desktop_notification/src"
+  )
+  if(WIN32)
+    target_link_libraries(desktop_notification PRIVATE runtimeobject)
+  endif()
+  set_target_properties(desktop_notification PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/desktop_notification/bin"
+    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/desktop_notification/bin"
+  )
+  if(CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT MSVC)
+    target_compile_options(desktop_notification PRIVATE -fvisibility=hidden)
+  endif()
+  message(STATUS "Building desktop_notification -> plugins/desktop_notification/bin/")
 endif()
 
 # ------------------------------------------------------------------------------

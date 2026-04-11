@@ -1,0 +1,23 @@
+{
+  "name": "desktop-notification",
+  "version": "1.0.0",
+  "description": "Cross-platform desktop notifications for any MCP-compatible LLM. WinRT Toast on Windows, notify-send on Linux, osascript on macOS. Also installable as a Claude Code marketplace package.",
+  "author": "MCP Server",
+  "keywords": ["notification", "desktop", "toast", "alert", "cross-platform", "linux", "macos", "windows"],
+  "license": "MIT",
+
+  "_comment_mcp": "--- MCP Native Plugin fields (used by NativePluginLoader) ---",
+  "mcp_plugin": true,
+  "binary": "bin/desktop_notification.dll",
+  "platforms": ["win32", "linux", "darwin"],
+
+  "_comment_claude": "--- Claude Code marketplace fields (used by claude /plugin enable) ---",
+  "hooks": "hooks/hooks.json",
+  "scripts": {
+    "adapter": "scripts/claude_adapter.ps1"
+  },
+  "permissions": [
+    "network:localhost"
+  ],
+  "readme": "hooks/README.md"
+}
