@@ -296,6 +296,21 @@ Do {{input}}.
     EXPECT_TRUE(skill.m_CommandTemplate.empty());
 }
 
+TEST(PluginLoaderTest, CommandSkill_NoRequiredVariables) {
+    // A command skill with no variables: section at all — should parse with empty list
+    std::string content = R"(---
+name: no_vars
+description: No variables needed
+type: command
+command_template: echo hello
+---
+)";
+    auto skill = PluginLoader::ParseSkillMd(content);
+    EXPECT_EQ(skill.m_Type, SkillType::Command);
+    EXPECT_EQ(skill.m_CommandTemplate, "echo hello");
+    EXPECT_TRUE(skill.m_RequiredVariables.empty());
+}
+
 TEST(PluginLoaderTest, CommandSkill_VariablesAndRulesCoexist) {
     std::string content = R"(---
 name: mixed

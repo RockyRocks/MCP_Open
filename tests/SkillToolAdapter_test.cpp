@@ -282,6 +282,25 @@ TEST(SkillToolAdapterTest, LlmSkill_GetMetadata_RulesNotInDescription) {
     EXPECT_EQ(meta.m_Description.find("Rule only for system prompt"), std::string::npos);
 }
 
+TEST(SkillToolAdapterTest, CommandSkill_NoVariables_ExecutesDirectly) {
+    // A zero-variable command skill: no payload needed, template runs as-is
+    auto provider = std::make_shared<MockLLMProvider>();
+    SkillDefinition skill;
+    skill.m_Name            = "no_vars";
+    skill.m_Type            = SkillType::Command;
+    skill.m_CommandTemplate = "echo static_output";
+    // m_RequiredVariables intentionally empty
+
+    SkillToolAdapter adapter(skill, provider);
+    nlohmann::json request = {{"payload", nlohmann::json::object()}};
+    auto result = adapter.ExecuteAsync(request).get();
+
+    EXPECT_EQ(result["status"], "ok");
+    EXPECT_EQ(result["skill"], "no_vars");
+    EXPECT_NE(result["content"].get<std::string>().find("static_output"),
+              std::string::npos);
+}
+
 // ---------------------------------------------------------------------------
 // Parallel execution test
 // ---------------------------------------------------------------------------
