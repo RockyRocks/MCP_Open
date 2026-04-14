@@ -128,6 +128,8 @@ set(CORE_SOURCES
     src/plugins/DlPlugin.cpp
     src/plugins/NativePluginAdapter.cpp
     src/plugins/NativePluginLoader.cpp
+    src/plugins/ScriptPluginAdapter.cpp
+    src/plugins/ScriptPluginLoader.cpp
     src/http/HttplibClient.cpp
     src/security/RateLimiter.cpp
     src/security/ApiKeyValidator.cpp
@@ -243,6 +245,8 @@ set(TEST_SOURCES
     tests/McpServerRegistry_test.cpp
     tests/StdioTransport_test.cpp
     tests/NativePlugin_test.cpp
+    tests/ScriptPluginAdapter_test.cpp
+    tests/ScriptPluginLoader_test.cpp
 )
 
 # Desktop notification plugin tests — cross-platform
@@ -265,6 +269,11 @@ endif()
 # Include path for desktop_notification backend (needed on all platforms)
 target_include_directories(unit_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/plugins/desktop_notification/src"
+)
+
+# Test plugin directory — used by ScriptPlugin tests to locate echo-plugin
+target_compile_definitions(unit_tests PRIVATE
+    TEST_PLUGIN_DIR="${PROJECT_SOURCE_DIR}/tests/test_plugins"
 )
 # runtimeobject.lib only needed on Windows (WRL COM for WinRT)
 if(WIN32)

@@ -37,16 +37,14 @@ nlohmann::json ProtocolHandler::Handle(const nlohmann::json& request) {
     }
 
     std::string command = request["command"].get<std::string>();
-    auto cmd = m_Registry->Resolve(command);
-    if (!cmd) {
+    if (!m_Registry->Resolve(command)) {
         return {{"status", "error"},
                 {"error", "Unknown command: " + command},
                 {"available_commands", m_Registry->ListCommands()}};
     }
 
     try {
-        auto future = cmd->ExecuteAsync(request);
-        return future.get();
+        return m_Registry->ExecuteWithChaining(command, request);
     } catch (const std::exception& e) {
         Logger::GetInstance().Log(std::string("Command execution failed: ") + e.what());
         return {{"status", "error"}, {"error", "Command execution failed"}};

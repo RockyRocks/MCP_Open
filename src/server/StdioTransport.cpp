@@ -218,8 +218,7 @@ nlohmann::json StdioTransport::HandleToolsCall(
     };
 
     try {
-        auto future = cmd->ExecuteAsync(internalRequest);
-        nlohmann::json result = future.get();
+        nlohmann::json result = m_Registry->ExecuteWithChaining(toolName, internalRequest);
 
         // Check for command-level errors
         bool isError = result.value("status", "ok") == "error";

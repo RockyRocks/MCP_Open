@@ -9,6 +9,7 @@ enum class ToolSource {
     JsonSkill,    ///< Promoted from a skills/*.json file
     Plugin,       ///< Promoted from a plugins/*/skills/*/SKILL.md file
     NativePlugin, ///< Loaded from a native shared library (.dll / .so)
+    ScriptPlugin, ///< Loaded from a script plugin (Python / Node.js / C# / executable)
 };
 
 /// Unified metadata for MCP tools. Each command can self-describe by

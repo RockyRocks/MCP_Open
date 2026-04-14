@@ -1,0 +1,7 @@
+{
+  "name": "echo-plugin",
+  "version": "1.0.0",
+  "description": "Test plugin — echoes input and simulates an error tool",
+  "runtime": "python",
+  "entrypoint": "scripts/echo_plugin.py"
+}

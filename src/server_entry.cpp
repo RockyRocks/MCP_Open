@@ -13,6 +13,7 @@
 #include <skills/SkillToolAdapter.h>
 #include <skills/PluginLoader.h>
 #include <plugins/NativePluginLoader.h>
+#include <plugins/ScriptPluginLoader.h>
 #include <http/HttplibClient.h>
 #include <security/RateLimiter.h>
 #include <security/ApiKeyValidator.h>
@@ -94,6 +95,9 @@ int main(int argc, char** argv) {
 
     // Native plugin tools — load .dll/.so plugins and register each tool
     NativePluginLoader::LoadAll(config.GetPluginsDirectory(), *commandRegistry);
+
+    // Script plugin tools — load Python / Node.js / C# / executable plugins
+    ScriptPluginLoader::LoadAll(config.GetPluginsDirectory(), *commandRegistry);
 
     Logger::GetInstance().Log("Registered commands: echo, llm, remote, skill(hidden), +"
         + std::to_string(skillEngine->ListSkills().size()) + " skill tools");

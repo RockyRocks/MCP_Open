@@ -251,3 +251,100 @@ TEST(CommandRegistryTest, MixedVisibleAndHiddenTools) {
         EXPECT_NE(m.m_Name, "hidden1");
     }
 }
+
+// ---------------------------------------------------------------------------
+// ExecuteWithChaining() tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// Returns a result that includes a "chain" field pointing to nextTool.
+class ChainToCommand : public ICommandStrategy {
+    std::string m_NextTool;
+public:
+    explicit ChainToCommand(std::string nextTool) : m_NextTool(std::move(nextTool)) {}
+
+    std::future<nlohmann::json> ExecuteAsync(const nlohmann::json&) override {
+        return std::async(std::launch::async, [n = m_NextTool]() -> nlohmann::json {
+            return {
+                {"status", "ok"},
+                {"chain", {
+                    {"tool", n},
+                    {"args", nlohmann::json::object()}
+                }}
+            };
+        });
+    }
+    ToolMetadata GetMetadata() const override { return {}; }
+};
+
+/// Terminal command that returns a plain result with no "chain" field.
+class FinalResultCommand : public ICommandStrategy {
+public:
+    std::future<nlohmann::json> ExecuteAsync(const nlohmann::json&) override {
+        return std::async(std::launch::async, []() -> nlohmann::json {
+            return {{"status", "ok"}, {"result", "final_value"}};
+        });
+    }
+    ToolMetadata GetMetadata() const override { return {}; }
+};
+
+/// Always returns a chain back to itself ("loop_chain") — used to test max depth.
+class SelfChainCommand : public ICommandStrategy {
+public:
+    std::future<nlohmann::json> ExecuteAsync(const nlohmann::json&) override {
+        return std::async(std::launch::async, []() -> nlohmann::json {
+            return {
+                {"status", "ok"},
+                {"data",   "loop"},
+                {"chain",  {{"tool", "loop_chain"}, {"args", nlohmann::json::object()}}}
+            };
+        });
+    }
+    ToolMetadata GetMetadata() const override { return {}; }
+};
+
+} // anonymous namespace
+
+TEST(CommandRegistryTest, ExecuteWithChaining_NoChainField_ReturnsNormally) {
+    CommandRegistry reg;
+    reg.RegisterCommand("echo", CreateEchoCommand());
+
+    nlohmann::json req = {{"command", "echo"}, {"payload", {{"msg", "test"}}}};
+    auto result = reg.ExecuteWithChaining("echo", req);
+
+    EXPECT_EQ(result["status"], "ok");
+    EXPECT_FALSE(result.contains("chain"));
+}
+
+TEST(CommandRegistryTest, ExecuteWithChaining_SingleChain_ReturnsFinalResult) {
+    CommandRegistry reg;
+    reg.RegisterCommand("tool_a", std::make_shared<ChainToCommand>("tool_b"));
+    reg.RegisterCommand("tool_b", std::make_shared<FinalResultCommand>());
+
+    nlohmann::json req = {{"command", "tool_a"}, {"payload", nlohmann::json::object()}};
+    auto result = reg.ExecuteWithChaining("tool_a", req);
+
+    // Must be tool_b's result, not tool_a's chain response
+    EXPECT_EQ(result["status"], "ok");
+    EXPECT_EQ(result["result"], "final_value");
+    EXPECT_FALSE(result.contains("chain"));
+}
+
+TEST(CommandRegistryTest, ExecuteWithChaining_MaxDepthExceeded_StopsGracefully) {
+    CommandRegistry reg;
+    // loop_chain always chains back to itself
+    reg.RegisterCommand("loop_chain", std::make_shared<SelfChainCommand>());
+
+    nlohmann::json req = {{"command", "loop_chain"}, {"payload", nlohmann::json::object()}};
+
+    // Must not hang, throw, or recurse infinitely
+    auto result = reg.ExecuteWithChaining("loop_chain", req);
+
+    // The command's base result is returned once the depth limit is hit
+    EXPECT_EQ(result["status"], "ok");
+    EXPECT_EQ(result["data"],   "loop");
+    // The "chain" field is still in the returned JSON — we stopped following it,
+    // not stripped it
+    EXPECT_TRUE(result.contains("chain"));
+}

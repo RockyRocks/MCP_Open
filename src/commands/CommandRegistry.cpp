@@ -1,4 +1,5 @@
 #include <commands/CommandRegistry.h>
+#include <core/Logger.h>
 #include <stdexcept>
 
 void CommandRegistry::RegisterCommand(const std::string& name,
@@ -28,6 +29,38 @@ std::vector<std::string> CommandRegistry::ListCommands() const {
         names.push_back(name);
     }
     return names;
+}
+
+nlohmann::json CommandRegistry::ExecuteWithChaining(
+    const std::string& toolName,
+    const nlohmann::json& request,
+    int depth)
+{
+    auto cmd = Resolve(toolName);
+    if (!cmd)
+        return {{"status", "error"}, {"error", "Unknown command: " + toolName}};
+
+    nlohmann::json result = cmd->ExecuteAsync(request).get();
+
+    // Detect optional chain directive
+    if (depth < kMaxChainDepth
+        && result.contains("chain") && result["chain"].is_object())
+    {
+        const auto& chain    = result["chain"];
+        std::string nextTool = chain.value("tool", "");
+        nlohmann::json nextArgs = chain.value("args", nlohmann::json::object());
+
+        if (!nextTool.empty()) {
+            nlohmann::json nextReq = {{"command", nextTool}, {"payload", nextArgs}};
+            return ExecuteWithChaining(nextTool, nextReq, depth + 1);
+        }
+    } else if (depth >= kMaxChainDepth && result.contains("chain")) {
+        Logger::GetInstance().Log(
+            "[Chain] Max depth " + std::to_string(kMaxChainDepth)
+            + " reached — stopping chain from " + toolName);
+    }
+
+    return result;
 }
 
 std::vector<ToolMetadata> CommandRegistry::ListToolMetadata() const {
