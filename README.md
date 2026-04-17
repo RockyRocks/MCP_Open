@@ -125,6 +125,12 @@ graph TD
         NPA[NativePluginAdapter ×N<br/>NativePlugin — fault-isolated]
     end
 
+    subgraph Script Plugin System
+        SPL[ScriptPluginLoader]
+        SPA[ScriptPluginAdapter ×N<br/>ScriptPlugin — per-call subprocess]
+        SCRIPT[Python / Node.js / C# / Executable<br/>plugin scripts]
+    end
+
     subgraph Engines
         LP[LiteLLM Provider]
         MSR[MCP Server Registry]
@@ -139,6 +145,7 @@ graph TD
 
     MAIN --> CFG
     MAIN --> NPL
+    MAIN --> SPL
     CFG --> HTTP
     CFG --> STDIO
 
@@ -157,6 +164,7 @@ graph TD
     CR --> REMOTE_CMD
     CR --> STA
     CR --> NPA
+    CR --> SPA
 
     LLM_CMD --> LP
     SKILL_CMD --> SE
@@ -174,6 +182,9 @@ graph TD
     WATCH -->|new .dll/.so detected| NPL
     NPL -->|notifications/tools/list_changed| STDIO
 
+    SPL --> SPA
+    SPA --> SCRIPT
+
     LP --> LITELLM
     HC --> REMOTE_SRV
 ```
@@ -182,7 +193,7 @@ graph TD
 
 | Decision | Rationale |
 | -------- | --------- |
-| **Unified `CommandRegistry`** | Every tool — built-in, JSON skill, SKILL.md plugin, native DL plugin — is a flat `ICommandStrategy`. `tools/list` is a single filtered view. |
+| **Unified `CommandRegistry`** | Every tool — built-in, JSON skill, SKILL.md plugin, native DL plugin, script plugin — is a flat `ICommandStrategy`. `tools/list` is a single filtered view. |
 | **`skill` meta-tool hidden** | Kept for backward compat but `m_Hidden = true` so it doesn't appear in `tools/list`. Skills are promoted as individual first-class tools. |
 | **C ABI for native plugins** | `extern "C"` is the only ABI that is stable across compilers, compiler versions, and standard libraries. Plugin authors compile with any toolchain. |
 | **`NativePluginAdapter` fault isolation** | Three protection layers: exception catch → `isError`, 30 s `wait_for` timeout, circuit breaker after 3 faults. A broken plugin cannot crash the host. |
@@ -253,23 +264,27 @@ sequenceDiagram
 MCP_Open/
 ├── include/                  # Public headers
 │   ├── commands/             #   CommandRegistry, ICommandStrategy, ToolMetadata
-│   │                         #     ToolSource: BuiltIn | JsonSkill | Plugin | NativePlugin
+│   │                         #     ToolSource: BuiltIn | JsonSkill | Plugin | NativePlugin | ScriptPlugin
 │   ├── core/                 #   ProtocolHandler, Config, Logger, ThreadPool
 │   ├── discovery/            #   McpServerRegistry, CompositeCommand
 │   ├── http/                 #   IHttpClient
 │   ├── llm/                  #   ILLMProvider, LiteLLMProvider, LLMCommand
-│   ├── plugins/              #   Native plugin system (NEW)
-│   │   ├── PluginABI.h       #     Stable extern "C" ABI contract (plugin authors include this)
+│   ├── plugins/              #   Plugin systems
+│   │   ├── PluginABI.h       #     Stable extern "C" ABI contract (native plugin authors include this)
 │   │   ├── IPlugin.h         #     Abstract C++ interface (mockable in tests)
 │   │   ├── DlPlugin.h        #     Concrete LoadLibrary/dlopen loader
 │   │   ├── NativePluginAdapter.h  # ICommandStrategy wrapper with fault isolation
-│   │   └── NativePluginLoader.h  # Directory scanner, watcher, notify callback
+│   │   ├── NativePluginLoader.h  # Directory scanner, watcher, notify callback
+│   │   ├── ScriptPlugin.h    #     POD structs: ScriptPluginToolInfo, ScriptPlugin
+│   │   ├── ScriptPluginAdapter.h # ICommandStrategy wrapper — per-call subprocess spawn
+│   │   └── ScriptPluginLoader.h  # Scans plugin dirs for plugin.json with "runtime" key
 │   ├── security/             #   RateLimiter, ApiKeyValidator, SecurityHeaders
 │   ├── server/               #   IServer, HttplibServer, UwsServer, StdioTransport
 │   ├── skills/               #   SkillEngine, SkillCommand, SkillToolAdapter, PluginLoader
 │   └── validation/           #   InputSanitizer, JsonSchemaValidator
 ├── src/                      # Implementation files (mirrors include/)
 │   ├── plugins/              #   DlPlugin.cpp, NativePluginAdapter.cpp, NativePluginLoader.cpp
+│   │                         #   ScriptPluginAdapter.cpp, ScriptPluginLoader.cpp
 │   └── ...
 ├── plugins/                  # Plugin directory (loaded at runtime)
 │   └── example_plugin/       #   Reference native plugin
@@ -286,7 +301,9 @@ MCP_Open/
 │   └── src/mcp_capi.cpp
 ├── csharp/                   # C# wrapper (McpClient.csproj)
 ├── config/                   # Example configuration files
-├── tests/                    # Unit tests (GTest / Catch2) — 117 tests
+├── tests/                    # Unit tests (GTest / Catch2) — 179 tests (167 pass, 12 skip without Python)
+│   └── test_plugins/         #   Fixture script plugins used by integration tests
+│       └── echo-plugin/      #     echo_tool + fail_tool Python plugin
 ├── litellm/                  # LiteLLM proxy launcher & config
 ├── CMakeLists.txt            # Build system
 └── BUILD.md                  # Detailed build instructions
@@ -488,11 +505,194 @@ All models in `litellm_config.yaml` (`claude-sonnet`, `gpt-4o`, `gemini-pro`, �
 
 ---
 
-## Plugins
+## Script Plugins (Python / Node.js / C# / Executable)
+
+Script plugins extend the server with tools written in any language. Each call spawns a fresh subprocess, reads stdout, and the process exits. No persistent IPC or language runtime embedding is required.
+
+### Plugin Directory Layout
+
+```text
+plugins/
+└── my-python-plugin/
+    ├── plugin.json          # MUST contain "runtime" and "entrypoint"
+    └── scripts/
+        └── plugin.py        # (or .js / .dll / .exe — relative to plugin dir)
+```
+
+### `plugin.json` — Script Plugin Fields
+
+```json
+{
+  "name":       "my-python-plugin",
+  "version":    "1.0.0",
+  "runtime":    "python",
+  "entrypoint": "scripts/plugin.py"
+}
+```
+
+| `runtime` value | Windows executable | Linux/macOS executable |
+| --------------- | ------------------ | ---------------------- |
+| `"python"` | `python` | `python3` |
+| `"node"` | `node` | `node` |
+| `"dotnet"` | `dotnet` | `dotnet` |
+| `"executable"` | entrypoint IS the exe — no prefix | same |
+| anything else | used as-is (e.g. `"python3"`, `"node20"`) | same |
+
+### Plugin Protocol
+
+**Discovery** — called once at startup:
+
+```text
+<runtime> "<entrypoint>" --mcp-list
+stdout → [{"name":"tool_name","description":"...","inputSchema":{...}}, ...]
+```
+
+**Execution** — called once per `tools/call`. Arguments are passed via a temp JSON file (eliminates shell-escaping):
+
+```text
+<runtime> "<entrypoint>" --mcp-call <tool_name> --mcp-args-file "<tmp.json>"
+stdout → {"status":"ok","content":"result text"}
+       | {"status":"error","error":"message"}
+```
+
+### Python Plugin Example
+
+```python
+# plugin.py
+import sys, json, argparse
+
+TOOLS = [
+    {
+        "name": "echo_tool",
+        "description": "Echoes a message back",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"message": {"type": "string"}},
+            "required": ["message"]
+        }
+    }
+]
+
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument("--mcp-list",      action="store_true")
+parser.add_argument("--mcp-call",      metavar="TOOL")
+parser.add_argument("--mcp-args-file", metavar="FILE")
+args, _ = parser.parse_known_args()
+
+if args.mcp_list:
+    sys.stdout.write(json.dumps(TOOLS) + "\n")
+
+elif args.mcp_call == "echo_tool":
+    with open(args.mcp_args_file) as f:
+        payload = json.load(f)
+    sys.stdout.write(json.dumps({"status": "ok", "content": payload["message"]}) + "\n")
+```
+
+### TypeScript / Node.js Plugin with Zod (v4+)
+
+Zod v4's built-in `z.toJSONSchema()` generates the `inputSchema` at runtime — single source of truth for schema AND validation. Requires `npm install zod@^4`.
+
+```javascript
+// plugin.js  (or compiled from TypeScript)
+const { z } = require('zod');
+const fs    = require('fs');
+
+const EchoSchema = z.object({
+    message: z.string().describe("Text to echo back")
+});
+
+const TOOLS = [
+    {
+        name:        "echo_tool",
+        description: "Echoes a message back",
+        inputSchema: z.toJSONSchema(EchoSchema, { target: "draft-07" })
+    }
+];
+
+const argv = process.argv.slice(2);
+
+if (argv.includes("--mcp-list")) {
+    process.stdout.write(JSON.stringify(TOOLS) + "\n");
+
+} else if (argv.includes("--mcp-call")) {
+    const toolName  = argv[argv.indexOf("--mcp-call") + 1];
+    const argsFile  = argv[argv.indexOf("--mcp-args-file") + 1];
+    try {
+        const raw  = JSON.parse(fs.readFileSync(argsFile, "utf-8"));
+        if (toolName === "echo_tool") {
+            const args = EchoSchema.parse(raw);   // runtime validation via Zod
+            process.stdout.write(JSON.stringify({ status: "ok", content: args.message }) + "\n");
+        } else {
+            process.stdout.write(JSON.stringify({ status: "error", error: `Unknown tool: ${toolName}` }) + "\n");
+        }
+    } catch (err) {
+        process.stdout.write(JSON.stringify({ status: "error", error: String(err) }) + "\n");
+        process.exit(1);
+    }
+}
+```
+
+> **Zod v3 users**: Use the `zod-to-json-schema` package instead of `z.toJSONSchema()`.
+
+### `plugin.json` for Node.js
+
+```json
+{
+  "name":       "my-node-plugin",
+  "version":    "1.0.0",
+  "runtime":    "node",
+  "entrypoint": "scripts/plugin.js"
+}
+```
+
+### C# Plugin Checklist
+
+- `"runtime": "dotnet"` — entry point is a `.dll` built with `dotnet build`
+- `"runtime": "executable"` — entry point is a self-contained `.exe`
+- Use `Environment.GetCommandLineArgs()` and `System.Text.Json` for I/O
+- Stdout must be a **single line** per command invocation
+
+### Tool name validation
+
+Tool names must match `[a-zA-Z0-9_-]+`. Names that fail validation are logged and skipped at discovery time.
+
+---
+
+## Tool Chaining
+
+A tool can include a `"chain"` field in its result to immediately invoke another tool with derived arguments — no LLM round-trip required. The MCP client receives only the final result; all intermediate hops are invisible.
+
+### Chain response format (from any tool)
+
+```json
+{
+  "status":  "ok",
+  "content": "step 1 done",
+  "chain":   { "tool": "next_tool", "args": { "input": "derived value" } }
+}
+```
+
+### Cross-source chaining
+
+`CommandRegistry::ExecuteWithChaining` detects the `"chain"` field after every `ExecuteAsync` call, making chaining source-agnostic:
+
+| Tool source | Can initiate chain | Can be chained to |
+| ----------- | ------------------ | ----------------- |
+| `BuiltIn` | Yes | Yes |
+| `JsonSkill` | Yes | Yes |
+| `Plugin` (SKILL.md) | Yes | Yes |
+| `NativePlugin` (.dll/.so) | Yes | Yes |
+| `ScriptPlugin` (Python/Node/C#) | Yes | Yes |
+
+Maximum chain depth is **5** (`kMaxChainDepth`). Exceeding it returns the last result without further chaining and logs a warning.
+
+---
+
+## Plugins (SKILL.md)
 
 Plugins extend the server with additional tools without modifying C++ code. Each plugin is a directory containing a `plugin.json` manifest and one or more skills defined as `SKILL.md` files. At startup the server promotes every skill into its own first-class MCP tool, so any LLM can discover and call them directly via `tools/list`.
 
-### Plugin Directory Layout
+### SKILL.md Plugin Directory Layout
 
 ```text
 plugins/
@@ -671,7 +871,9 @@ ctest --test-dir build -C Release --output-on-failure
 build\Release\unit_tests.exe  # Windows
 ```
 
-Test suites cover: protocol handling, command registry, input sanitization, rate limiting, configuration, skill engine, server discovery, and stdio transport.
+Test suites cover: protocol handling, command registry, input sanitization, rate limiting, configuration, skill engine, server discovery, stdio transport, native plugin system, script plugin adapter, and script plugin loader.
+
+12 integration tests are conditionally skipped when Python is not on `PATH` — they run automatically once Python is installed.
 
 ---
 
