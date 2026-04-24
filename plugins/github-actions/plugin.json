@@ -1,0 +1,7 @@
+{
+  "name": "github-actions",
+  "version": "1.0.0",
+  "description": "GitHub Actions CI: workflow status, logs, re-runs",
+  "runtime": "python",
+  "entrypoint": "scripts/github_actions.py"
+}

@@ -247,6 +247,7 @@ set(TEST_SOURCES
     tests/NativePlugin_test.cpp
     tests/ScriptPluginAdapter_test.cpp
     tests/ScriptPluginLoader_test.cpp
+    tests/ScriptPlugin_Integration_test.cpp
 )
 
 # Desktop notification plugin tests — cross-platform
@@ -274,6 +275,7 @@ target_include_directories(unit_tests PRIVATE
 # Test plugin directory — used by ScriptPlugin tests to locate echo-plugin
 target_compile_definitions(unit_tests PRIVATE
     TEST_PLUGIN_DIR="${PROJECT_SOURCE_DIR}/tests/test_plugins"
+    SCRIPT_PLUGIN_DIR="${PROJECT_SOURCE_DIR}/plugins"
 )
 # runtimeobject.lib only needed on Windows (WRL COM for WinRT)
 if(WIN32)

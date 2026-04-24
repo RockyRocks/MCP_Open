@@ -1,0 +1,7 @@
+{
+  "name": "git-tools",
+  "version": "1.0.0",
+  "description": "Git operations: status, changes, search, sync, reset, conflicts",
+  "runtime": "python",
+  "entrypoint": "scripts/git_tools.py"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "github-tools",
+  "version": "1.0.0",
+  "description": "GitHub operations via gh CLI: PRs, issues, repo info",
+  "runtime": "python",
+  "entrypoint": "scripts/github_tools.py"
+}
