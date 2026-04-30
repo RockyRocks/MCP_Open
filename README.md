@@ -4,6 +4,22 @@ An enterprise-grade **Model Context Protocol (MCP)** server implemented in C++20
 
 ---
 
+## About
+
+This project is a production-ready MCP server that bridges any LLM — Claude, GPT, Gemini, or open-source models — with custom tools, prompt-driven skills, and remote server networks through a single, unified protocol layer.
+
+It is built around three ideas:
+
+- **One protocol, every LLM.** The server speaks MCP JSON-RPC 2.0 over both HTTP and stdio. Any client that implements the protocol gets access to all registered tools — built-in commands, JSON skills, SKILL.md prompt templates, native C/C++ plugins, and script plugins in Python, Node.js, or C# — without per-model configuration.
+
+- **Extend without recompiling.** The plugin system supports three extension models — script plugins (subprocess per call), native plugins (shared libraries with hot-reload), and skill plugins (Markdown prompt templates) — so new tools can be added at runtime by dropping files into the `plugins/` directory. A background watcher detects new native plugins and pushes `notifications/tools/list_changed` so connected clients refresh automatically.
+
+- **Safe by default.** Every request passes through rate limiting, API key validation, input sanitization, and security headers before reaching any tool. Native plugins run inside a fault-isolation wrapper with exception catching, 30-second timeouts, and a circuit breaker. A misbehaving plugin cannot crash the server or block other tools.
+
+The server integrates directly with [Claude Code](https://claude.ai/code) as a registered MCP tool source and with [LiteLLM](https://github.com/BerriAI/litellm) as a proxy-level tool provider, making all registered tools available to every model routed through the proxy. It also exposes a C API for FFI/P/Invoke interop with .NET and other languages.
+
+---
+
 ## Features
 
 ### MCP Tools
@@ -295,8 +311,8 @@ Available plugins:
 | [`git-tools`](plugins/git-tools/) | Script | Git operations |
 | [`github-tools`](plugins/github-tools/) | Script | GitHub API integration |
 | [`github-actions`](plugins/github-actions/) | Script | GitHub Actions management |
-| [`desktop_notification`](plugins/desktop_notification/) | Native | Desktop notifications |
-| [`example_plugin`](plugins/example_plugin/) | Native | Reference plugin (ping + base64_encode) |
+| [`desktop-notification`](plugins/desktop-notification/) | Native | Desktop notifications |
+| [`example-plugin`](plugins/example-plugin/) | Native | Reference plugin (ping + base64_encode) |
 | [`entrian-search`](plugins/entrian-search/) | Skill | Entrian source search |
 | [`everything-search`](plugins/everything-search/) | Skill | Everything file search |
 

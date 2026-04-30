@@ -1,6 +1,6 @@
-# desktop_notification — Hook Adapter Pattern
+# desktop-notification — Hook Adapter Pattern
 
-The notification engine lives once, in `desktop_notification.dll|.so|.dylib`.
+The notification engine lives once, in `desktop-notification.dll|.so|.dylib`.
 Every integration path is just a thin adapter that calls the same two MCP tools:
 
 | Tool                    | When to use                                       |
@@ -25,7 +25,7 @@ Any trigger (Claude hook, GitHub Action, curl, CI bot...)
            │ HTTP POST /mcp  (primary path)
            ▼
     MCP Server
-    NativePluginLoader → desktop_notification.dll|.so|.dylib
+    NativePluginLoader → desktop-notification.dll|.so|.dylib
            │
            ├── Windows  → WinRT Toast (Win10/11) / MessageBeep fallback
            ├── Linux    → notify-send subprocess

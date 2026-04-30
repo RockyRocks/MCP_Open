@@ -1,4 +1,4 @@
-// desktop_notification.cpp
+// desktop-notification.cpp
 // MCP Native Plugin — cross-platform desktop notifications.
 //
 // Exposes two MCP tools:
@@ -11,8 +11,8 @@
 //   Linux          → notify-send subprocess
 //   macOS          → osascript subprocess
 //
-// Build: cmake --build . --target desktop_notification
-// Output: plugins/desktop_notification/bin/desktop_notification.dll|.so|.dylib
+// Build: cmake --build . --target desktop-notification
+// Output: plugins/desktop-notification/bin/desktop-notification.dll|.so|.dylib
 
 #include <plugins/PluginABI.h>
 #include "NotificationBackend.h"
@@ -192,7 +192,7 @@ MCP_PLUGIN_EXPORT uint32_t mcp_plugin_api_version() {
 }
 
 MCP_PLUGIN_EXPORT const char* mcp_plugin_manifest() {
-    return R"({"name":"desktop_notification","description":"Cross-platform desktop notifications via WinRT Toast (Windows), notify-send (Linux), or osascript (macOS). LLM-agnostic MCP tool.","version":"1.0.0"})";
+    return R"({"name":"desktop-notification","description":"Cross-platform desktop notifications via WinRT Toast (Windows), notify-send (Linux), or osascript (macOS). LLM-agnostic MCP tool.","version":"1.0.0"})";
 }
 
 MCP_PLUGIN_EXPORT void* mcp_plugin_create() {

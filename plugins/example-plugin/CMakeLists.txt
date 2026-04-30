@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(example_plugin LANGUAGES CXX)
+project(example-plugin LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -12,13 +12,13 @@ if(NOT DEFINED MCP_HOST_INCLUDE)
     set(MCP_HOST_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../../include")
 endif()
 
-add_library(example_plugin SHARED src/example_plugin.cpp)
+add_library(example-plugin SHARED src/example-plugin.cpp)
 
-target_include_directories(example_plugin PRIVATE "${MCP_HOST_INCLUDE}")
+target_include_directories(example-plugin PRIVATE "${MCP_HOST_INCLUDE}")
 
 # Place the output binary in bin/ beside the source tree so NativePluginLoader
-# can find it at <plugins-dir>/example_plugin/bin/example_plugin.dll|.so
-set_target_properties(example_plugin PROPERTIES
+# can find it at <plugins-dir>/example-plugin/bin/example-plugin.dll|.so
+set_target_properties(example-plugin PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin"  # DLL (Windows)
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin"  # SO (Unix)
 )
@@ -31,5 +31,5 @@ endif()
 
 # Strip unused symbols on Release builds (Unix only)
 if(CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT MSVC)
-    target_compile_options(example_plugin PRIVATE -fvisibility=hidden)
+    target_compile_options(example-plugin PRIVATE -fvisibility=hidden)
 endif()

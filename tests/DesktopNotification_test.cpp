@@ -1,5 +1,5 @@
 // DesktopNotification_test.cpp
-// Unit tests for the desktop_notification plugin using MockBackend.
+// Unit tests for the desktop-notification plugin using MockBackend.
 //
 // All tests are platform-neutral: MockBackend replaces the real backend, so
 // no WinRT, notify-send, or osascript is invoked during testing.
@@ -8,7 +8,7 @@
 
 #include <gtest/gtest.h>
 
-#include "../plugins/desktop_notification/src/NotificationBackend.h"
+#include "../plugins/desktop-notification/src/NotificationBackend.h"
 
 #include <memory>
 #include <string>

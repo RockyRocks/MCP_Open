@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(desktop_notification LANGUAGES CXX)
+project(desktop-notification LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,12 +9,12 @@ if(NOT DEFINED MCP_HOST_INCLUDE)
     set(MCP_HOST_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../../include")
 endif()
 
-add_library(desktop_notification SHARED
-    src/desktop_notification.cpp
+add_library(desktop-notification SHARED
+    src/desktop-notification.cpp
     src/NotificationBackend.cpp
 )
 
-target_include_directories(desktop_notification PRIVATE
+target_include_directories(desktop-notification PRIVATE
     "${MCP_HOST_INCLUDE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/src"  # for NotificationBackend.h
 )
@@ -22,7 +22,7 @@ target_include_directories(desktop_notification PRIVATE
 # Platform-specific link libraries
 if(WIN32)
     # runtimeobject.lib provides RoInitialize / RoGetActivationFactory (WRL COM)
-    target_link_libraries(desktop_notification PRIVATE runtimeobject)
+    target_link_libraries(desktop-notification PRIVATE runtimeobject)
 elseif(APPLE)
     # osascript is part of the macOS base install — no extra link needed
 elseif(UNIX)
@@ -30,13 +30,13 @@ elseif(UNIX)
 endif()
 
 # Place the output binary where NativePluginLoader expects it:
-#   plugins/desktop_notification/bin/desktop_notification.dll|.so|.dylib
-set_target_properties(desktop_notification PROPERTIES
+#   plugins/desktop-notification/bin/desktop-notification.dll|.so|.dylib
+set_target_properties(desktop-notification PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin"  # DLL on Windows
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin"  # SO/dylib on Unix
 )
 
 # Strip unused symbols on GCC/Clang Release builds
 if(CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT MSVC)
-    target_compile_options(desktop_notification PRIVATE -fvisibility=hidden)
+    target_compile_options(desktop-notification PRIVATE -fvisibility=hidden)
 endif()

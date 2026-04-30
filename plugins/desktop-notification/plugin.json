@@ -8,7 +8,7 @@
 
   "_comment_mcp": "--- MCP Native Plugin fields (used by NativePluginLoader) ---",
   "mcp_plugin": true,
-  "binary": "bin/desktop_notification.dll",
+  "binary": "bin/desktop-notification.dll",
   "platforms": ["win32", "linux", "darwin"],
 
   "_comment_claude": "--- Claude Code marketplace fields (used by claude /plugin enable) ---",

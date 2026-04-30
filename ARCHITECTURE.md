@@ -215,8 +215,8 @@ MCP_Open/
 │   │                         #   ScriptPluginAdapter.cpp, ScriptPluginLoader.cpp
 │   └── ...
 ├── plugins/                  # Plugin directory (loaded at runtime) — see plugins/README.md
-│   ├── desktop_notification/ #   Native plugin — desktop notifications
-│   ├── example_plugin/       #   Reference native plugin (ping + base64_encode)
+│   ├── desktop-notification/ #   Native plugin — desktop notifications
+│   ├── example-plugin/       #   Reference native plugin (ping + base64_encode)
 │   ├── git-tools/            #   Script plugin — git operations
 │   ├── github-tools/         #   Script plugin — GitHub API integration
 │   ├── github-actions/       #   Script plugin — GitHub Actions management

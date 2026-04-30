@@ -254,7 +254,7 @@ set(TEST_SOURCES
 # NotificationBackend.cpp compiles cleanly on all platforms via #ifdef guards.
 list(APPEND TEST_SOURCES
     tests/DesktopNotification_test.cpp
-    plugins/desktop_notification/src/NotificationBackend.cpp
+    plugins/desktop-notification/src/NotificationBackend.cpp
 )
 
 if(TEST_FRAMEWORK STREQUAL "GTest")
@@ -267,9 +267,9 @@ else()
   add_test(NAME unit_tests COMMAND unit_tests)
 endif()
 
-# Include path for desktop_notification backend (needed on all platforms)
+# Include path for desktop-notification backend (needed on all platforms)
 target_include_directories(unit_tests PRIVATE
-    "${PROJECT_SOURCE_DIR}/plugins/desktop_notification/src"
+    "${PROJECT_SOURCE_DIR}/plugins/desktop-notification/src"
 )
 
 # Test plugin directory — used by ScriptPlugin tests to locate echo-plugin
@@ -283,46 +283,46 @@ if(WIN32)
 endif()
 
 # ------------------------------------------------------------------------------
-# Desktop notification plugin (all platforms — builds into plugins/desktop_notification/bin/)
+# Desktop notification plugin (all platforms — builds into plugins/desktop-notification/bin/)
 # ------------------------------------------------------------------------------
-option(BUILD_DESKTOP_NOTIFICATION_PLUGIN "Build the desktop_notification native plugin" ON)
+option(BUILD_DESKTOP_NOTIFICATION_PLUGIN "Build the desktop-notification native plugin" ON)
 if(BUILD_DESKTOP_NOTIFICATION_PLUGIN)
-  add_library(desktop_notification SHARED
-    plugins/desktop_notification/src/desktop_notification.cpp
-    plugins/desktop_notification/src/NotificationBackend.cpp
+  add_library(desktop-notification SHARED
+    plugins/desktop-notification/src/desktop-notification.cpp
+    plugins/desktop-notification/src/NotificationBackend.cpp
   )
-  target_include_directories(desktop_notification PRIVATE
+  target_include_directories(desktop-notification PRIVATE
     "${PROJECT_SOURCE_DIR}/include"
-    "${PROJECT_SOURCE_DIR}/plugins/desktop_notification/src"
+    "${PROJECT_SOURCE_DIR}/plugins/desktop-notification/src"
   )
   if(WIN32)
-    target_link_libraries(desktop_notification PRIVATE runtimeobject)
+    target_link_libraries(desktop-notification PRIVATE runtimeobject)
   endif()
-  set_target_properties(desktop_notification PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/desktop_notification/bin"
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/desktop_notification/bin"
+  set_target_properties(desktop-notification PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/desktop-notification/bin"
+    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/desktop-notification/bin"
   )
   if(CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT MSVC)
-    target_compile_options(desktop_notification PRIVATE -fvisibility=hidden)
+    target_compile_options(desktop-notification PRIVATE -fvisibility=hidden)
   endif()
-  message(STATUS "Building desktop_notification -> plugins/desktop_notification/bin/")
+  message(STATUS "Building desktop-notification -> plugins/desktop-notification/bin/")
 endif()
 
 # ------------------------------------------------------------------------------
-# Example native plugin (optional — builds into plugins/example_plugin/bin/)
+# Example native plugin (optional — builds into plugins/example-plugin/bin/)
 # ------------------------------------------------------------------------------
 option(BUILD_EXAMPLE_PLUGIN "Build the example native plugin shared library" ON)
 if(BUILD_EXAMPLE_PLUGIN)
-  add_library(example_plugin SHARED
-    plugins/example_plugin/src/example_plugin.cpp
+  add_library(example-plugin SHARED
+    plugins/example-plugin/src/example-plugin.cpp
   )
-  target_include_directories(example_plugin PRIVATE ${PROJECT_SOURCE_DIR}/include)
-  set_target_properties(example_plugin PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/example_plugin/bin"
-    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/example_plugin/bin"
+  target_include_directories(example-plugin PRIVATE ${PROJECT_SOURCE_DIR}/include)
+  set_target_properties(example-plugin PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/example-plugin/bin"
+    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/example-plugin/bin"
   )
   if(CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT MSVC)
-    target_compile_options(example_plugin PRIVATE -fvisibility=hidden)
+    target_compile_options(example-plugin PRIVATE -fvisibility=hidden)
   endif()
-  message(STATUS "Building example_plugin -> plugins/example_plugin/bin/")
+  message(STATUS "Building example-plugin -> plugins/example-plugin/bin/")
 endif()

@@ -5,7 +5,7 @@ The MCP server supports three plugin types, all loaded from subdirectories of `p
 | Plugin Type | How it works | Examples |
 | ----------- | ------------ | -------- |
 | [Script Plugins](#script-plugins) | Per-call subprocess (Python / Node.js / C# / any executable) | `git-tools/`, `github-tools/`, `github-actions/` |
-| [Native Plugins](#native-plugins) | Compiled C/C++ shared library (`.dll` / `.so`) loaded via `LoadLibrary` / `dlopen` | `example_plugin/`, `desktop_notification/` |
+| [Native Plugins](#native-plugins) | Compiled C/C++ shared library (`.dll` / `.so`) loaded via `LoadLibrary` / `dlopen` | `example-plugin/`, `desktop-notification/` |
 | [Skill Plugins](#skill-plugins-skillmd) | Prompt-template files (`SKILL.md`) with `{{variable}}` interpolation | `entrian-search/`, `everything-search/` |
 
 ---
@@ -223,7 +223,7 @@ cp build/Release/my_native_plugin.dll bin/   # Windows
 cp build/libmy_native_plugin.so bin/          # Linux
 ```
 
-See [`example_plugin/`](example_plugin/) for a complete reference implementation with `ping` and `base64_encode` tools.
+See [`example-plugin/`](example-plugin/) for a complete reference implementation with `ping` and `base64_encode` tools.
 
 ---
 

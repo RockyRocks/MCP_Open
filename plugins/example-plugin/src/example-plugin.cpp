@@ -1,4 +1,4 @@
-// example_plugin.cpp
+// example-plugin.cpp
 // Demonstrates the MCP Native Plugin ABI.
 // Exposes two tools: "ping" and "base64_encode".
 //
@@ -8,8 +8,8 @@
 //   cmake --build .
 //
 // The resulting DLL/SO goes into:
-//   plugins/example_plugin/bin/example_plugin.dll   (Windows)
-//   plugins/example_plugin/bin/libexample_plugin.so (Linux)
+//   plugins/example-plugin/bin/example-plugin.dll   (Windows)
+//   plugins/example-plugin/bin/libexample-plugin.so (Linux)
 
 #include <plugins/PluginABI.h>
 #include <cstdlib>
@@ -128,7 +128,7 @@ MCP_PLUGIN_EXPORT uint32_t mcp_plugin_api_version() {
 }
 
 MCP_PLUGIN_EXPORT const char* mcp_plugin_manifest() {
-    return R"({"name":"example_plugin","description":"Example MCP native plugin: ping and base64_encode","version":"1.0.0"})";
+    return R"({"name":"example-plugin","description":"Example MCP native plugin: ping and base64_encode","version":"1.0.0"})";
 }
 
 MCP_PLUGIN_EXPORT void* mcp_plugin_create() {
