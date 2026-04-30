@@ -315,6 +315,7 @@ Available plugins:
 | [`example-plugin`](plugins/example-plugin/) | Native | Reference plugin (ping + base64_encode) |
 | [`entrian-search`](plugins/entrian-search/) | Skill | Entrian source search |
 | [`everything-search`](plugins/everything-search/) | Skill | Everything file search |
+| [`jira-tools`](plugins/jira-tools/) | Skill | Jira issue details, JQL search, comments |
 
 ---
 

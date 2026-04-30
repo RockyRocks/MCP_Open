@@ -6,7 +6,7 @@ The MCP server supports three plugin types, all loaded from subdirectories of `p
 | ----------- | ------------ | -------- |
 | [Script Plugins](#script-plugins) | Per-call subprocess (Python / Node.js / C# / any executable) | `git-tools/`, `github-tools/`, `github-actions/` |
 | [Native Plugins](#native-plugins) | Compiled C/C++ shared library (`.dll` / `.so`) loaded via `LoadLibrary` / `dlopen` | `example-plugin/`, `desktop-notification/` |
-| [Skill Plugins](#skill-plugins-skillmd) | Prompt-template files (`SKILL.md`) with `{{variable}}` interpolation | `entrian-search/`, `everything-search/` |
+| [Skill Plugins](#skill-plugins-skillmd) | Prompt-template files (`SKILL.md`) with `{{variable}}` interpolation | `entrian-search/`, `everything-search/`, `jira-tools/` |
 
 ---
 

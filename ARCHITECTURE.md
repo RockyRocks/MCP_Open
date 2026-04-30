@@ -221,7 +221,8 @@ MCP_Open/
 │   ├── github-tools/         #   Script plugin — GitHub API integration
 │   ├── github-actions/       #   Script plugin — GitHub Actions management
 │   ├── entrian-search/       #   Skill plugin — Entrian source search
-│   └── everything-search/    #   Skill plugin — Everything file search
+│   ├── everything-search/    #   Skill plugin — Everything file search
+│   └── jira-tools/           #   Skill plugin — Jira integration (read-only)
 ├── skills/                   # JSON skill definitions (loaded at startup)
 │   ├── code_review.json
 │   ├── summarize.json
