@@ -127,6 +127,12 @@ void NativePluginLoader::LoadAll(const std::string& pluginsDir,
     }
 
     std::error_code ec;
+    fs::path canonRoot = fs::canonical(root, ec);
+    if (ec) {
+        Logger::GetInstance().Log("[NativePlugin] cannot resolve plugins root: " + ec.message());
+        return;
+    }
+
     for (const auto& entry : fs::directory_iterator(root, ec)) {
         if (!entry.is_directory()) continue;
 
@@ -137,7 +143,15 @@ void NativePluginLoader::LoadAll(const std::string& pluginsDir,
             if (!binEntry.is_regular_file()) continue;
             if (!IsPluginBinary(binEntry.path())) continue;
 
-            LoadOne(binEntry.path().string(), registry, "startup");
+            std::error_code ec2;
+            fs::path canonBin = fs::canonical(binEntry.path(), ec2);
+            if (ec2 || canonBin.string().rfind(canonRoot.string(), 0) != 0) {
+                Logger::GetInstance().Log(
+                    "[NativePlugin] path traversal blocked: " + binEntry.path().string());
+                continue;
+            }
+
+            LoadOne(canonBin.string(), registry, "startup");
         }
     }
 }
@@ -159,6 +173,11 @@ void NativePluginLoader::StartWatcher(const std::string& pluginsDir,
         // Seed the set with whatever is already present at watcher start
         fs::path root(pluginsDir);
         std::error_code ec;
+        fs::path canonRoot = fs::canonical(root, ec);
+        if (ec) {
+            Logger::GetInstance().Log("[NativePlugin] watcher: cannot resolve root: " + ec.message());
+            return;
+        }
         if (fs::exists(root, ec) && fs::is_directory(root, ec)) {
             for (const auto& entry : fs::directory_iterator(root, ec)) {
                 if (!entry.is_directory()) continue;
@@ -190,8 +209,17 @@ void NativePluginLoader::StartWatcher(const std::string& pluginsDir,
                     if (!binEntry.is_regular_file()) continue;
                     if (!IsPluginBinary(binEntry.path())) continue;
 
-                    std::string path = binEntry.path().string();
-                    if (loaded.count(path)) continue;  // already loaded
+                    std::error_code ec3;
+                    fs::path canonBin = fs::canonical(binEntry.path(), ec3);
+                    if (ec3 || canonBin.string().rfind(canonRoot.string(), 0) != 0) {
+                        Logger::GetInstance().Log(
+                            "[NativePlugin] watcher: path traversal blocked: "
+                            + binEntry.path().string());
+                        continue;
+                    }
+
+                    std::string path = canonBin.string();
+                    if (loaded.count(path)) continue;
 
                     Logger::GetInstance().Log(
                         "[NativePlugin] watcher detected new plugin: " + path);

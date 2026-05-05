@@ -28,6 +28,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <unordered_set>
 
 int main(int argc, char** argv) {
     // Determine config path and transport mode from CLI args
@@ -61,7 +62,9 @@ int main(int argc, char** argv) {
     // Skills engine — load JSON skills then SKILL.md plugin skills
     auto skillEngine = std::make_shared<SkillEngine>();
     skillEngine->LoadFromDirectory(config.GetSkillsDirectory());
-    PluginLoader::LoadIntoEngine(config.GetPluginsDirectory(), *skillEngine);
+    auto pluginSkillNames = PluginLoader::LoadIntoEngine(config.GetPluginsDirectory(), *skillEngine);
+    std::unordered_set<std::string> pluginSkillSet(pluginSkillNames.begin(),
+                                                    pluginSkillNames.end());
 
     // MCP server discovery
     auto mcpRegistry = std::make_shared<McpServerRegistry>();
@@ -86,11 +89,10 @@ int main(int argc, char** argv) {
     for (const auto& name : skillEngine->ListSkills()) {
         auto def = skillEngine->Resolve(name);
         if (!def.has_value()) continue;
-        // Detect source: plugin skills have no default_model (set by PluginLoader)
-        // Use JsonSkill as default; PluginLoader-loaded skills are indistinguishable here
-        // so we tag all promoted skills as JsonSkill (ToolSource has no runtime effect).
+        ToolSource source = pluginSkillSet.count(name) ? ToolSource::Plugin
+                                                       : ToolSource::JsonSkill;
         commandRegistry->RegisterCommand(name,
-            std::make_shared<SkillToolAdapter>(*def, llmProvider));
+            std::make_shared<SkillToolAdapter>(*def, llmProvider, source));
     }
 
     // Native plugin tools — load .dll/.so plugins and register each tool
@@ -121,11 +123,25 @@ int main(int argc, char** argv) {
                 transportPtr->PushNotification(notification);
             });
 
+        ScriptPluginLoader::SetNotifyCallback(
+            [transportPtr](const nlohmann::json& payload) {
+                nlohmann::json notification = {
+                    {"jsonrpc", "2.0"},
+                    {"method",  "notifications/tools/list_changed"},
+                    {"params",  payload}
+                };
+                transportPtr->PushNotification(notification);
+            });
+
         NativePluginLoader::StartWatcher(config.GetPluginsDirectory(),
+                                         commandRegistry);
+        ScriptPluginLoader::StartWatcher(config.GetPluginsDirectory(),
                                          commandRegistry);
 
         transportPtr->Run();
 
+        ScriptPluginLoader::StopWatcher();
+        ScriptPluginLoader::SetNotifyCallback(nullptr);
         NativePluginLoader::StopWatcher();
         NativePluginLoader::SetNotifyCallback(nullptr);
         return 0;
@@ -210,12 +226,18 @@ int main(int argc, char** argv) {
     NativePluginLoader::SetNotifyCallback([](const nlohmann::json& payload) {
         Logger::GetInstance().Log("[plugin_loaded] " + payload.dump());
     });
+    ScriptPluginLoader::SetNotifyCallback([](const nlohmann::json& payload) {
+        Logger::GetInstance().Log("[script_plugin_reloaded] " + payload.dump());
+    });
     NativePluginLoader::StartWatcher(config.GetPluginsDirectory(), commandRegistry);
+    ScriptPluginLoader::StartWatcher(config.GetPluginsDirectory(), commandRegistry);
 
     int port = config.GetServerPort();
     Logger::GetInstance().Log("Starting server on port " + std::to_string(port));
     server->Listen("0.0.0.0", port);
 
+    ScriptPluginLoader::StopWatcher();
+    ScriptPluginLoader::SetNotifyCallback(nullptr);
     NativePluginLoader::StopWatcher();
     NativePluginLoader::SetNotifyCallback(nullptr);
     return 0;

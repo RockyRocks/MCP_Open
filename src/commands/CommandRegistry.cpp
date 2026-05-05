@@ -7,10 +7,16 @@ void CommandRegistry::RegisterCommand(const std::string& name,
     if (name.empty()) {
         throw std::invalid_argument("Command name cannot be empty");
     }
+    std::unique_lock lock(m_Mutex);
+    if (m_Commands.count(name)) {
+        Logger::GetInstance().Log(
+            "[CommandRegistry] Tool '" + name + "' already registered — overwriting");
+    }
     m_Commands[name] = std::move(command);
 }
 
 std::shared_ptr<ICommandStrategy> CommandRegistry::Resolve(const std::string& name) const {
+    std::shared_lock lock(m_Mutex);
     auto it = m_Commands.find(name);
     if (it == m_Commands.end()) {
         return nullptr;
@@ -19,10 +25,12 @@ std::shared_ptr<ICommandStrategy> CommandRegistry::Resolve(const std::string& na
 }
 
 bool CommandRegistry::HasCommand(const std::string& name) const {
+    std::shared_lock lock(m_Mutex);
     return m_Commands.count(name) > 0;
 }
 
 std::vector<std::string> CommandRegistry::ListCommands() const {
+    std::shared_lock lock(m_Mutex);
     std::vector<std::string> names;
     names.reserve(m_Commands.size());
     for (const auto& [name, _] : m_Commands) {
@@ -42,7 +50,6 @@ nlohmann::json CommandRegistry::ExecuteWithChaining(
 
     nlohmann::json result = cmd->ExecuteAsync(request).get();
 
-    // Detect optional chain directive
     if (depth < kMaxChainDepth
         && result.contains("chain") && result["chain"].is_object())
     {
@@ -64,6 +71,7 @@ nlohmann::json CommandRegistry::ExecuteWithChaining(
 }
 
 std::vector<ToolMetadata> CommandRegistry::ListToolMetadata() const {
+    std::shared_lock lock(m_Mutex);
     std::vector<ToolMetadata> result;
     result.reserve(m_Commands.size());
     for (const auto& [name, cmd] : m_Commands) {

@@ -48,10 +48,11 @@ private:
     nlohmann::json HandleInitialize(const nlohmann::json& params, const nlohmann::json& id);
     nlohmann::json HandleToolsList(const nlohmann::json& id);
     nlohmann::json HandleToolsCall(const nlohmann::json& params, const nlohmann::json& id);
-    /// MCP extension: execute multiple tool calls in parallel and return all results.
     nlohmann::json HandleToolsCallBatch(const nlohmann::json& params, const nlohmann::json& id);
     nlohmann::json HandlePromptsList(const nlohmann::json& id);
     nlohmann::json HandlePromptsGet(const nlohmann::json& params, const nlohmann::json& id);
+    nlohmann::json HandleResourcesList(const nlohmann::json& params, const nlohmann::json& id);
+    nlohmann::json HandleResourcesRead(const nlohmann::json& params, const nlohmann::json& id);
 
     // JSON-RPC helpers
     nlohmann::json MakeResponse(const nlohmann::json& id, const nlohmann::json& result);
@@ -75,6 +76,7 @@ private:
     std::ostream& m_Output;
     std::string m_ServerName;
     std::string m_ServerVersion;
+    std::string m_ResourceRoot;
     bool m_Initialized = false;
     std::atomic<bool> m_Running{false};
     std::mutex m_WriteMutex;

@@ -4,6 +4,8 @@
 #include <discovery/McpServerRegistry.h>
 #include <core/Logger.h>
 
+#include <filesystem>
+#include <fstream>
 #include <sstream>
 
 #ifdef _WIN32
@@ -36,6 +38,8 @@ StdioTransport::StdioTransport(
     , m_ServerName(serverName)
     , m_ServerVersion(serverVersion)
 {
+    std::error_code ec;
+    m_ResourceRoot = std::filesystem::current_path(ec).string();
 }
 
 void StdioTransport::Run() {
@@ -140,6 +144,12 @@ nlohmann::json StdioTransport::Dispatch(const nlohmann::json& message) {
     if (method == "prompts/get") {
         return HandlePromptsGet(params, id);
     }
+    if (method == "resources/list") {
+        return HandleResourcesList(params, id);
+    }
+    if (method == "resources/read") {
+        return HandleResourcesRead(params, id);
+    }
 
     return MakeError(id, JSONRPC_METHOD_NOT_FOUND,
                      "Method not found: " + method);
@@ -157,7 +167,8 @@ nlohmann::json StdioTransport::HandleInitialize(
         {"protocolVersion", MCP_PROTOCOL_VERSION},
         {"capabilities", {
             {"tools", nlohmann::json::object()},
-            {"prompts", nlohmann::json::object()}
+            {"prompts", nlohmann::json::object()},
+            {"resources", nlohmann::json::object()}
         }},
         {"serverInfo", {
             {"name", m_ServerName},
@@ -420,6 +431,109 @@ nlohmann::json StdioTransport::HandlePromptsGet(
     } catch (const std::exception& e) {
         return MakeError(id, JSONRPC_INVALID_PARAMS, e.what());
     }
+}
+
+nlohmann::json StdioTransport::HandleResourcesList(
+    const nlohmann::json& /*params*/, const nlohmann::json& id) {
+
+    namespace fs = std::filesystem;
+    nlohmann::json resources = nlohmann::json::array();
+
+    if (m_ResourceRoot.empty()) {
+        return MakeResponse(id, {{"resources", resources}});
+    }
+
+    std::error_code ec;
+    fs::path root(m_ResourceRoot);
+    if (!fs::exists(root, ec) || !fs::is_directory(root, ec)) {
+        return MakeResponse(id, {{"resources", resources}});
+    }
+
+    static constexpr int kMaxEntries = 200;
+    int count = 0;
+    for (auto it = fs::recursive_directory_iterator(root, ec);
+         it != fs::recursive_directory_iterator() && count < kMaxEntries; ++it)
+    {
+        if (it->is_directory(ec)) continue;
+
+        auto relPath = fs::relative(it->path(), root, ec);
+        if (ec) continue;
+
+        std::string uri = "file://" + relPath.generic_string();
+        std::string name = relPath.generic_string();
+
+        resources.push_back({
+            {"uri", uri},
+            {"name", name},
+            {"mimeType", "text/plain"}
+        });
+        ++count;
+    }
+
+    return MakeResponse(id, {{"resources", resources}});
+}
+
+nlohmann::json StdioTransport::HandleResourcesRead(
+    const nlohmann::json& params, const nlohmann::json& id) {
+
+    namespace fs = std::filesystem;
+
+    if (!params.contains("uri") || !params["uri"].is_string()) {
+        return MakeError(id, JSONRPC_INVALID_PARAMS,
+                         "Missing required parameter: uri");
+    }
+
+    std::string uri = params["uri"].get<std::string>();
+
+    // Strip file:// prefix
+    std::string relPath = uri;
+    if (relPath.rfind("file://", 0) == 0) {
+        relPath = relPath.substr(7);
+    }
+
+    fs::path fullPath = (fs::path(m_ResourceRoot) / relPath).lexically_normal();
+
+    // Path traversal check
+    std::error_code ec;
+    fs::path canonRoot = fs::canonical(fs::path(m_ResourceRoot), ec);
+    if (ec) {
+        return MakeError(id, JSONRPC_INTERNAL_ERROR, "Cannot resolve resource root");
+    }
+
+    if (!fs::exists(fullPath, ec)) {
+        return MakeError(id, JSONRPC_INVALID_PARAMS, "Resource not found: " + uri);
+    }
+
+    fs::path canonPath = fs::canonical(fullPath, ec);
+    if (ec || canonPath.string().rfind(canonRoot.string(), 0) != 0) {
+        return MakeError(id, JSONRPC_INVALID_PARAMS,
+                         "Access denied: path outside resource root");
+    }
+
+    // Read file contents (cap at 1 MiB)
+    static constexpr size_t kMaxReadSize = 1024 * 1024;
+    std::ifstream f(canonPath, std::ios::binary);
+    if (!f.is_open()) {
+        return MakeError(id, JSONRPC_INTERNAL_ERROR,
+                         "Cannot open resource: " + uri);
+    }
+
+    std::string content;
+    content.resize(kMaxReadSize);
+    f.read(content.data(), static_cast<std::streamsize>(kMaxReadSize));
+    content.resize(static_cast<size_t>(f.gcount()));
+
+    nlohmann::json result = {
+        {"contents", nlohmann::json::array({
+            {
+                {"uri", uri},
+                {"mimeType", "text/plain"},
+                {"text", content}
+            }
+        })}
+    };
+
+    return MakeResponse(id, result);
 }
 
 // ---------------------------------------------------------------------------

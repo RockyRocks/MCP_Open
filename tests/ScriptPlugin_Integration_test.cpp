@@ -239,7 +239,137 @@ TEST(ScriptPluginIntegration, GitHubActions_LogsMissingRunId_ReturnsError) {
 }
 
 // ---------------------------------------------------------------------------
-// ScriptPluginLoader integration — all 3 plugins loaded together
+// filesystem-tools plugin tests
+// ---------------------------------------------------------------------------
+
+TEST(ScriptPluginIntegration, FilesystemTools_DiscoverTools_Returns7Tools) {
+    if (!IsPythonAvailable()) GTEST_SKIP() << "Python not available";
+
+    std::string entrypoint = (fs::path(kPluginsDir)
+        / "filesystem-tools" / "scripts" / "filesystem_tools.py").string();
+
+    auto tools = ScriptPluginAdapter::DiscoverTools("filesystem-tools", "python", entrypoint);
+    ASSERT_EQ(tools.size(), 7u);
+
+    std::vector<std::string> names;
+    for (const auto& t : tools) names.push_back(t.m_Name);
+
+    EXPECT_NE(std::find(names.begin(), names.end(), "fs_read"),   names.end());
+    EXPECT_NE(std::find(names.begin(), names.end(), "fs_write"),  names.end());
+    EXPECT_NE(std::find(names.begin(), names.end(), "fs_edit"),   names.end());
+    EXPECT_NE(std::find(names.begin(), names.end(), "fs_mkdir"),  names.end());
+    EXPECT_NE(std::find(names.begin(), names.end(), "fs_delete"), names.end());
+    EXPECT_NE(std::find(names.begin(), names.end(), "fs_list"),   names.end());
+    EXPECT_NE(std::find(names.begin(), names.end(), "fs_search"), names.end());
+}
+
+TEST(ScriptPluginIntegration, FilesystemTools_ReadFile_ReturnsContent) {
+    if (!IsPythonAvailable()) GTEST_SKIP() << "Python not available";
+
+    std::string entrypoint = (fs::path(kPluginsDir)
+        / "filesystem-tools" / "scripts" / "filesystem_tools.py").string();
+
+    ScriptPluginToolInfo info;
+    info.m_Name = "fs_read";
+    ScriptPluginAdapter adapter("filesystem-tools", "python", entrypoint, info);
+
+    std::string pluginJson = (fs::path(kPluginsDir)
+        / "filesystem-tools" / "plugin.json").string();
+
+    nlohmann::json request = {
+        {"command", "fs_read"},
+        {"payload", {{"path", pluginJson}}}
+    };
+    auto result = adapter.ExecuteAsync(request).get();
+
+    EXPECT_FALSE(result.value("isError", false));
+    ASSERT_TRUE(result.contains("content"));
+    ASSERT_FALSE(result["content"].empty());
+    std::string text = result["content"][0].value("text", "");
+    EXPECT_NE(text.find("filesystem-tools"), std::string::npos);
+}
+
+TEST(ScriptPluginIntegration, FilesystemTools_ListDir_ReturnsEntries) {
+    if (!IsPythonAvailable()) GTEST_SKIP() << "Python not available";
+
+    std::string entrypoint = (fs::path(kPluginsDir)
+        / "filesystem-tools" / "scripts" / "filesystem_tools.py").string();
+
+    ScriptPluginToolInfo info;
+    info.m_Name = "fs_list";
+    ScriptPluginAdapter adapter("filesystem-tools", "python", entrypoint, info);
+
+    nlohmann::json request = {
+        {"command", "fs_list"},
+        {"payload", {{"path", kPluginsDir}}}
+    };
+    auto result = adapter.ExecuteAsync(request).get();
+
+    EXPECT_FALSE(result.value("isError", false));
+    ASSERT_TRUE(result.contains("content"));
+    std::string text = result["content"][0].value("text", "");
+    EXPECT_NE(text.find("filesystem-tools"), std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// shell-tools plugin tests
+// ---------------------------------------------------------------------------
+
+TEST(ScriptPluginIntegration, ShellTools_DiscoverTools_Returns4Tools) {
+    if (!IsPythonAvailable()) GTEST_SKIP() << "Python not available";
+
+    std::string entrypoint = (fs::path(kPluginsDir)
+        / "shell-tools" / "scripts" / "shell_tools.py").string();
+
+    auto tools = ScriptPluginAdapter::DiscoverTools("shell-tools", "python", entrypoint);
+    ASSERT_EQ(tools.size(), 4u);
+}
+
+TEST(ScriptPluginIntegration, ShellTools_ExecEcho_ReturnsOutput) {
+    if (!IsPythonAvailable()) GTEST_SKIP() << "Python not available";
+
+    std::string entrypoint = (fs::path(kPluginsDir)
+        / "shell-tools" / "scripts" / "shell_tools.py").string();
+
+    ScriptPluginToolInfo info;
+    info.m_Name = "shell_exec";
+    ScriptPluginAdapter adapter("shell-tools", "python", entrypoint, info);
+
+    nlohmann::json request = {
+        {"command", "shell_exec"},
+        {"payload", {{"command", "echo hello_mcp_test"}}}
+    };
+    auto result = adapter.ExecuteAsync(request).get();
+
+    EXPECT_FALSE(result.value("isError", false));
+    ASSERT_TRUE(result.contains("content"));
+    std::string text = result["content"][0].value("text", "");
+    EXPECT_NE(text.find("hello_mcp_test"), std::string::npos);
+}
+
+// ---------------------------------------------------------------------------
+// build-tools plugin tests
+// ---------------------------------------------------------------------------
+
+TEST(ScriptPluginIntegration, BuildTools_DiscoverTools_Returns3Tools) {
+    if (!IsPythonAvailable()) GTEST_SKIP() << "Python not available";
+
+    std::string entrypoint = (fs::path(kPluginsDir)
+        / "build-tools" / "scripts" / "build_tools.py").string();
+
+    auto tools = ScriptPluginAdapter::DiscoverTools("build-tools", "python", entrypoint);
+    ASSERT_EQ(tools.size(), 3u);
+
+    std::vector<std::string> names;
+    for (const auto& t : tools) names.push_back(t.m_Name);
+
+    EXPECT_NE(std::find(names.begin(), names.end(), "build_run"), names.end());
+    EXPECT_NE(std::find(names.begin(), names.end(), "test_run"),  names.end());
+    EXPECT_NE(std::find(names.begin(), names.end(), "lint_run"),  names.end());
+}
+
+// ---------------------------------------------------------------------------
+// ScriptPluginLoader integration — all plugins loaded together
 // ---------------------------------------------------------------------------
 
 TEST(ScriptPluginIntegration, LoadAll_RegistersAllTools) {
@@ -248,13 +378,17 @@ TEST(ScriptPluginIntegration, LoadAll_RegistersAllTools) {
     CommandRegistry reg;
     ScriptPluginLoader::LoadAll(kPluginsDir, reg);
 
-    // git-tools: 6, github-tools: 9, github-actions: 4 = 19 total
+    // git-tools: 6, github-tools: 9, github-actions: 4,
+    // filesystem-tools: 7, shell-tools: 4, build-tools: 3 = 33 total
     auto commands = reg.ListCommands();
-    EXPECT_GE(commands.size(), 19u);
+    EXPECT_GE(commands.size(), 33u);
 
     EXPECT_TRUE(reg.HasCommand("git_status"));
     EXPECT_TRUE(reg.HasCommand("gh_pr_status"));
     EXPECT_TRUE(reg.HasCommand("gh_actions_status"));
+    EXPECT_TRUE(reg.HasCommand("fs_read"));
+    EXPECT_TRUE(reg.HasCommand("shell_exec"));
+    EXPECT_TRUE(reg.HasCommand("build_run"));
 }
 
 TEST(ScriptPluginIntegration, LoadAll_AllToolsHaveScriptPluginSource) {

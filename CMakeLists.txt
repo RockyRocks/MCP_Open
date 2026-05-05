@@ -130,6 +130,8 @@ set(CORE_SOURCES
     src/plugins/NativePluginLoader.cpp
     src/plugins/ScriptPluginAdapter.cpp
     src/plugins/ScriptPluginLoader.cpp
+    src/plugins/SubprocessPipe.cpp
+    src/plugins/StdioMCPAdapter.cpp
     src/http/HttplibClient.cpp
     src/security/RateLimiter.cpp
     src/security/ApiKeyValidator.cpp
@@ -248,6 +250,7 @@ set(TEST_SOURCES
     tests/ScriptPluginAdapter_test.cpp
     tests/ScriptPluginLoader_test.cpp
     tests/ScriptPlugin_Integration_test.cpp
+    tests/StdioMCPAdapter_test.cpp
 )
 
 # Desktop notification plugin tests — cross-platform

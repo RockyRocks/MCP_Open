@@ -29,6 +29,7 @@
 class ScriptPluginAdapter : public ICommandStrategy {
 public:
     static constexpr size_t kMaxOutputBytes = 4 * 1024 * 1024;  // 4 MiB guard
+    static constexpr int    kTimeoutSeconds = 60;
 
     ScriptPluginAdapter(std::string pluginName,
                         std::string runtime,

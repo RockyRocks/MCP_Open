@@ -1,0 +1,6 @@
+{
+  "name": "stdio-echo",
+  "runtime": "mcp-stdio",
+  "command_runtime": "python",
+  "entrypoint": "scripts/server.py"
+}

@@ -1,6 +1,7 @@
 #pragma once
 #include <skills/SkillEngine.h>
 #include <string>
+#include <vector>
 
 /// Loads Claude Code plugins into a SkillEngine.
 ///
@@ -30,8 +31,10 @@
 class PluginLoader {
 public:
     /// Walk pluginsDir and load every SKILL.md into engine.
+    /// Returns the names of skills that were successfully loaded.
     /// Silently skips missing or malformed entries (logs warnings).
-    static void LoadIntoEngine(const std::string& pluginsDir, SkillEngine& engine);
+    static std::vector<std::string> LoadIntoEngine(const std::string& pluginsDir,
+                                                    SkillEngine& engine);
 
     /// Parse a SKILL.md string into a SkillDefinition.
     /// Throws std::runtime_error if the content has no valid frontmatter.

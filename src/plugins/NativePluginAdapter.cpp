@@ -32,26 +32,35 @@ std::future<nlohmann::json> NativePluginAdapter::ExecuteAsync(
             };
         }
 
-        // We need a timeout-capable future that doesn't block its own
-        // destructor. Using std::promise + detached std::thread avoids the
-        // blocking destructor of std::async(launch::async, ...) futures.
+        int active = m_ActiveThreads.load();
+        if (active >= kMaxConcurrentCalls) {
+            Logger::GetInstance().Log(
+                "[NativePlugin] '" + m_ToolName + "' rejected: "
+                + std::to_string(active) + " zombie threads outstanding");
+            return {
+                {"isError", true},
+                {"content", {{{"type","text"},
+                              {"text","Plugin tool '" + m_ToolName
+                                      + "' has too many outstanding calls ("
+                                      + std::to_string(active) + ")"}}}}
+            };
+        }
+
         auto promise = std::make_shared<std::promise<nlohmann::json>>();
         std::future<nlohmann::json> innerFuture = promise->get_future();
 
-        std::thread([this, request, promise]() mutable {
+        auto activeCounter = &m_ActiveThreads;
+        ++(*activeCounter);
+
+        std::thread([this, request, promise, activeCounter]() mutable {
             try {
                 promise->set_value(m_Plugin->Execute(m_ToolName, request));
             } catch (...) {
-                // Use current_exception() to capture the live exception with
-                // its full dynamic type and message intact. Catching by
-                // reference and then calling std::make_exception_ptr(ex) would
-                // slice the exception to the base std::exception type, losing
-                // the message on GCC/Clang where only derived classes own the
-                // message storage.
                 try {
                     promise->set_exception(std::current_exception());
                 } catch (...) {}
             }
+            --(*activeCounter);
         }).detach();
 
         auto status = innerFuture.wait_for(
@@ -59,10 +68,12 @@ std::future<nlohmann::json> NativePluginAdapter::ExecuteAsync(
 
         if (status == std::future_status::timeout) {
             int faults = ++m_FaultCount;
+            int zombies = m_ActiveThreads.load();
             Logger::GetInstance().Log(
                 "[NativePlugin] timeout executing '" + m_ToolName
                 + "' (fault " + std::to_string(faults) + "/"
-                + std::to_string(kMaxFaults) + ")");
+                + std::to_string(kMaxFaults)
+                + ", zombie threads: " + std::to_string(zombies) + ")");
             return {
                 {"isError", true},
                 {"content", {{{"type","text"},

@@ -3,6 +3,7 @@
 #include <core/Logger.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstdio>       // popen/_popen, fgets, pclose/_pclose
 #include <filesystem>
 #include <fstream>
@@ -10,11 +11,16 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 #ifdef _WIN32
+#include <windows.h>
+#include <aclapi.h>
 #include <process.h>    // _getpid
 #else
 #include <unistd.h>     // getpid
+#include <sys/stat.h>
+#include <fcntl.h>
 #endif
 
 namespace fs = std::filesystem;
@@ -93,6 +99,40 @@ void TrimRight(std::string& str) {
     while (!str.empty() && (str.back() == '\n' || str.back() == '\r'
                              || str.back() == ' ' || str.back() == '\t'))
         str.pop_back();
+}
+
+/// Write content to a file with owner-only permissions.
+/// Returns true on success.
+bool WriteSecureTempFile(const fs::path& path, const std::string& content) {
+#ifdef _WIN32
+    // CreateFileW with no sharing + write DACL after creation
+    HANDLE h = CreateFileW(path.wstring().c_str(),
+                           GENERIC_WRITE, 0 /*no sharing*/,
+                           nullptr, CREATE_ALWAYS,
+                           FILE_ATTRIBUTE_TEMPORARY, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
+
+    DWORD written = 0;
+    BOOL ok = WriteFile(h, content.data(),
+                        static_cast<DWORD>(content.size()), &written, nullptr);
+    CloseHandle(h);
+    return ok && (written == static_cast<DWORD>(content.size()));
+#else
+    // Open with 0600 permissions (owner read/write only)
+    int fd = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0) return false;
+
+    auto remaining = content.size();
+    auto ptr = content.data();
+    while (remaining > 0) {
+        auto n = write(fd, ptr, remaining);
+        if (n <= 0) { close(fd); return false; }
+        ptr += n;
+        remaining -= static_cast<size_t>(n);
+    }
+    close(fd);
+    return true;
+#endif
 }
 
 }  // anonymous namespace
@@ -230,11 +270,9 @@ std::future<nlohmann::json> ScriptPluginAdapter::ExecuteAsync(const nlohmann::js
     return std::async(std::launch::async, [runtime, entrypoint, toolName, request]()
         -> nlohmann::json
     {
-        // 1. Extract arguments from request
         nlohmann::json args = request.value("payload",
                               request.value("arguments", nlohmann::json::object()));
 
-        // 2. Generate a unique temp file path
         static std::atomic<uint64_t> s_Counter{0};
         uint64_t n = s_Counter.fetch_add(1, std::memory_order_relaxed);
 #ifdef _WIN32
@@ -245,24 +283,43 @@ std::future<nlohmann::json> ScriptPluginAdapter::ExecuteAsync(const nlohmann::js
         fs::path tmpPath = fs::temp_directory_path()
             / ("mcp_script_" + std::to_string(n) + "_" + std::to_string(pid) + ".json");
 
-        // 3. RAII guard — removes tmpPath on scope exit even if an exception fires
         TempFileGuard guard{tmpPath};
 
-        // 4. Write args to temp file
-        {
-            std::ofstream f(tmpPath);
-            if (!f.is_open())
-                return ErrorResponse("Failed to create temp args file: " + tmpPath.string());
-            f << args.dump();
+        if (!WriteSecureTempFile(tmpPath, args.dump()))
+            return ErrorResponse("Failed to create temp args file: " + tmpPath.string());
+
+        std::string cmd = BuildCallCommand(runtime, entrypoint, toolName, tmpPath.string());
+
+        // Run subprocess in a detached thread with timeout to prevent thread starvation
+        auto promise = std::make_shared<std::promise<std::string>>();
+        std::future<std::string> outputFuture = promise->get_future();
+
+        std::thread([cmd, promise]() {
+            try {
+                promise->set_value(RunCommand(cmd, kMaxOutputBytes));
+            } catch (...) {
+                try { promise->set_exception(std::current_exception()); } catch (...) {}
+            }
+        }).detach();
+
+        auto status = outputFuture.wait_for(std::chrono::seconds(kTimeoutSeconds));
+        if (status == std::future_status::timeout) {
+            Logger::GetInstance().Log(
+                "[ScriptPlugin] timeout executing '" + toolName
+                + "' after " + std::to_string(kTimeoutSeconds) + "s");
+            return ErrorResponse(
+                "Script tool '" + toolName + "' timed out after "
+                + std::to_string(kTimeoutSeconds) + "s");
         }
 
-        // 5. Build command and run
-        std::string cmd = BuildCallCommand(runtime, entrypoint, toolName, tmpPath.string());
-        std::string output = RunCommand(cmd, kMaxOutputBytes);
+        std::string output;
+        try {
+            output = outputFuture.get();
+        } catch (const std::exception& e) {
+            return ErrorResponse(
+                std::string("Script subprocess failed: ") + e.what());
+        }
 
-        // 6. TempFileGuard destructor fires here (tmpPath removed)
-
-        // 7. Parse result
         if (output.empty())
             return ErrorResponse("Script returned no output for tool: " + toolName);
 
@@ -279,7 +336,6 @@ std::future<nlohmann::json> ScriptPluginAdapter::ExecuteAsync(const nlohmann::js
                 };
             }
 
-            // Wrap plain string content as MCP content array
             if (result.contains("content") && result["content"].is_string()) {
                 nlohmann::json wrapped = result;
                 wrapped["content"] = {{{"type", "text"},

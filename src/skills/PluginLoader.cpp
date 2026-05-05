@@ -171,13 +171,14 @@ SkillDefinition PluginLoader::ParseSkillMd(const std::string& content,
     return skill;
 }
 
-void PluginLoader::LoadIntoEngine(const std::string& pluginsDir, SkillEngine& engine) {
+std::vector<std::string> PluginLoader::LoadIntoEngine(const std::string& pluginsDir,
+                                                       SkillEngine& engine) {
+    std::vector<std::string> loadedNames;
     if (!fs::exists(pluginsDir) || !fs::is_directory(pluginsDir)) {
         Logger::GetInstance().Log("Plugins directory not found: " + pluginsDir + " (skipping)");
-        return;
+        return loadedNames;
     }
 
-    int loaded = 0;
     for (const auto& pluginEntry : fs::directory_iterator(pluginsDir)) {
         if (!pluginEntry.is_directory()) continue;
 
@@ -198,7 +199,7 @@ void PluginLoader::LoadIntoEngine(const std::string& pluginsDir, SkillEngine& en
                 std::string content = ReadFile(skillMdPath);
                 SkillDefinition skill = ParseSkillMd(content, fallbackName, pluginDir.string());
                 engine.LoadSkill(skill);
-                ++loaded;
+                loadedNames.push_back(skill.m_Name);
                 Logger::GetInstance().Log("Loaded plugin skill: " + skill.m_Name
                                           + " (from " + skillMdPath.string() + ")");
             } catch (const std::exception& e) {
@@ -208,5 +209,7 @@ void PluginLoader::LoadIntoEngine(const std::string& pluginsDir, SkillEngine& en
         }
     }
 
-    Logger::GetInstance().Log("PluginLoader: loaded " + std::to_string(loaded) + " plugin skill(s)");
+    Logger::GetInstance().Log("PluginLoader: loaded " + std::to_string(loadedNames.size())
+                              + " plugin skill(s)");
+    return loadedNames;
 }

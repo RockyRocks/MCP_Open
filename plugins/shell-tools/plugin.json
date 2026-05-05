@@ -1,0 +1,7 @@
+{
+  "name": "shell-tools",
+  "version": "1.0.0",
+  "description": "Shell command execution with timeout and background process management",
+  "runtime": "python",
+  "entrypoint": "scripts/shell_tools.py"
+}

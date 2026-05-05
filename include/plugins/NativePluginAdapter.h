@@ -20,8 +20,9 @@
 ///     via a subprocess sandbox).
 class NativePluginAdapter : public ICommandStrategy {
 public:
-    static constexpr int kMaxFaults            = 3;
-    static constexpr int kDefaultTimeoutSeconds = 30;
+    static constexpr int kMaxFaults              = 3;
+    static constexpr int kDefaultTimeoutSeconds  = 30;
+    static constexpr int kMaxConcurrentCalls     = 8;
 
     NativePluginAdapter(std::shared_ptr<IPlugin> plugin,
                         std::string toolName,
@@ -34,6 +35,7 @@ public:
 
     bool IsDisabled() const { return m_FaultCount.load() >= kMaxFaults; }
     int  GetFaultCount() const { return m_FaultCount.load(); }
+    int  GetActiveThreads() const { return m_ActiveThreads.load(); }
 
 private:
     std::shared_ptr<IPlugin> m_Plugin;
@@ -42,4 +44,5 @@ private:
     nlohmann::json           m_InputSchema;
     int                      m_TimeoutSeconds;
     std::atomic<int>         m_FaultCount{0};
+    std::atomic<int>         m_ActiveThreads{0};
 };
