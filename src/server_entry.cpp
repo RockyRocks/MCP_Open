@@ -1,5 +1,6 @@
 #include <core/Config.h>
 #include <core/Logger.h>
+#include <core/Version.h>
 #include <core/ProtocolHandler.h>
 #include <core/ThreadPool.h>
 #include <commands/CommandRegistry.h>
@@ -95,11 +96,12 @@ int main(int argc, char** argv) {
             std::make_shared<SkillToolAdapter>(*def, llmProvider, source));
     }
 
-    // Native plugin tools — load .dll/.so plugins and register each tool
-    NativePluginLoader::LoadAll(config.GetPluginsDirectory(), *commandRegistry);
+    // Plugin loaders (instance-based for testability and multi-instance support)
+    auto nativeLoader = std::make_shared<NativePluginLoader>();
+    auto scriptLoader = std::make_shared<ScriptPluginLoader>();
 
-    // Script plugin tools — load Python / Node.js / C# / executable plugins
-    ScriptPluginLoader::LoadAll(config.GetPluginsDirectory(), *commandRegistry);
+    nativeLoader->LoadAll(config.GetPluginsDirectory(), *commandRegistry);
+    scriptLoader->LoadAll(config.GetPluginsDirectory(), *commandRegistry);
 
     Logger::GetInstance().Log("Registered commands: echo, llm, remote, skill(hidden), +"
         + std::to_string(skillEngine->ListSkills().size()) + " skill tools");
@@ -108,12 +110,13 @@ int main(int argc, char** argv) {
     if (stdioMode) {
         // Use a shared_ptr so the watcher lambda can capture it safely
         auto transportPtr = std::make_shared<StdioTransport>(
-            commandRegistry, skillEngine, mcpRegistry);
+            commandRegistry, skillEngine, mcpRegistry,
+            std::cin, std::cout, "mcp-open", MCP_VERSION_STRING);
 
         // When a new plugin is hot-loaded at runtime, push a standard MCP
         // notifications/tools/list_changed event so the LLM client refreshes
         // its tool list without needing to poll.
-        NativePluginLoader::SetNotifyCallback(
+        nativeLoader->SetNotifyCallback(
             [transportPtr](const nlohmann::json& payload) {
                 nlohmann::json notification = {
                     {"jsonrpc", "2.0"},
@@ -123,7 +126,7 @@ int main(int argc, char** argv) {
                 transportPtr->PushNotification(notification);
             });
 
-        ScriptPluginLoader::SetNotifyCallback(
+        scriptLoader->SetNotifyCallback(
             [transportPtr](const nlohmann::json& payload) {
                 nlohmann::json notification = {
                     {"jsonrpc", "2.0"},
@@ -133,17 +136,15 @@ int main(int argc, char** argv) {
                 transportPtr->PushNotification(notification);
             });
 
-        NativePluginLoader::StartWatcher(config.GetPluginsDirectory(),
-                                         commandRegistry);
-        ScriptPluginLoader::StartWatcher(config.GetPluginsDirectory(),
-                                         commandRegistry);
+        nativeLoader->StartWatcher(config.GetPluginsDirectory(),
+                                    commandRegistry);
+        scriptLoader->StartWatcher(config.GetPluginsDirectory(),
+                                    commandRegistry);
 
         transportPtr->Run();
 
-        ScriptPluginLoader::StopWatcher();
-        ScriptPluginLoader::SetNotifyCallback(nullptr);
-        NativePluginLoader::StopWatcher();
-        NativePluginLoader::SetNotifyCallback(nullptr);
+        scriptLoader->StopWatcher();
+        nativeLoader->StopWatcher();
         return 0;
     }
 
@@ -221,24 +222,20 @@ int main(int argc, char** argv) {
             respond(200, cmds.dump());
         });
 
-    // In HTTP mode the notification goes to the log (Logger observer).
-    // Clients can poll GET /commands to detect newly registered tools.
-    NativePluginLoader::SetNotifyCallback([](const nlohmann::json& payload) {
+    nativeLoader->SetNotifyCallback([](const nlohmann::json& payload) {
         Logger::GetInstance().Log("[plugin_loaded] " + payload.dump());
     });
-    ScriptPluginLoader::SetNotifyCallback([](const nlohmann::json& payload) {
+    scriptLoader->SetNotifyCallback([](const nlohmann::json& payload) {
         Logger::GetInstance().Log("[script_plugin_reloaded] " + payload.dump());
     });
-    NativePluginLoader::StartWatcher(config.GetPluginsDirectory(), commandRegistry);
-    ScriptPluginLoader::StartWatcher(config.GetPluginsDirectory(), commandRegistry);
+    nativeLoader->StartWatcher(config.GetPluginsDirectory(), commandRegistry);
+    scriptLoader->StartWatcher(config.GetPluginsDirectory(), commandRegistry);
 
     int port = config.GetServerPort();
     Logger::GetInstance().Log("Starting server on port " + std::to_string(port));
     server->Listen("0.0.0.0", port);
 
-    ScriptPluginLoader::StopWatcher();
-    ScriptPluginLoader::SetNotifyCallback(nullptr);
-    NativePluginLoader::StopWatcher();
-    NativePluginLoader::SetNotifyCallback(nullptr);
+    scriptLoader->StopWatcher();
+    nativeLoader->StopWatcher();
     return 0;
 }

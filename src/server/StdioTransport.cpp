@@ -4,9 +4,11 @@
 #include <discovery/McpServerRegistry.h>
 #include <core/Logger.h>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <thread>
 
 #ifdef _WIN32
 #include <io.h>
@@ -100,6 +102,7 @@ void StdioTransport::Run() {
         }
     }
 
+    StopResourceWatcher();
     m_Running = false;
 }
 
@@ -120,7 +123,10 @@ nlohmann::json StdioTransport::Dispatch(const nlohmann::json& message) {
         return HandleInitialize(params, id);
     }
     if (method == "notifications/initialized") {
-        // Notification — no response
+        return nullptr;
+    }
+    if (method == "notifications/cancelled") {
+        HandleCancelNotification(params);
         return nullptr;
     }
 
@@ -150,6 +156,12 @@ nlohmann::json StdioTransport::Dispatch(const nlohmann::json& message) {
     if (method == "resources/read") {
         return HandleResourcesRead(params, id);
     }
+    if (method == "resources/subscribe") {
+        return HandleResourcesSubscribe(params, id);
+    }
+    if (method == "resources/unsubscribe") {
+        return HandleResourcesUnsubscribe(params, id);
+    }
 
     return MakeError(id, JSONRPC_METHOD_NOT_FOUND,
                      "Method not found: " + method);
@@ -168,7 +180,7 @@ nlohmann::json StdioTransport::HandleInitialize(
         {"capabilities", {
             {"tools", nlohmann::json::object()},
             {"prompts", nlohmann::json::object()},
-            {"resources", nlohmann::json::object()}
+            {"resources", {{"subscribe", true}}}
         }},
         {"serverInfo", {
             {"name", m_ServerName},
@@ -222,7 +234,14 @@ nlohmann::json StdioTransport::HandleToolsCall(
         arguments["parameters"] = meta.m_DefaultParameters;
     }
 
-    // Translate MCP tools/call to internal command format
+    std::string requestId = std::to_string(m_NextRequestId++);
+    arguments["_requestId"] = requestId;
+
+    {
+        std::lock_guard<std::mutex> lock(m_InFlightMutex);
+        m_InFlightRequests[id.dump()] = toolName;
+    }
+
     nlohmann::json internalRequest = {
         {"command", toolName},
         {"payload", arguments}
@@ -231,7 +250,11 @@ nlohmann::json StdioTransport::HandleToolsCall(
     try {
         nlohmann::json result = m_Registry->ExecuteWithChaining(toolName, internalRequest);
 
-        // Check for command-level errors
+        {
+            std::lock_guard<std::mutex> lock(m_InFlightMutex);
+            m_InFlightRequests.erase(id.dump());
+        }
+
         bool isError = result.value("status", "ok") == "error";
         std::string textContent = result.dump();
 
@@ -245,6 +268,10 @@ nlohmann::json StdioTransport::HandleToolsCall(
         return MakeResponse(id, mcpResult);
 
     } catch (const std::exception& e) {
+        {
+            std::lock_guard<std::mutex> lock(m_InFlightMutex);
+            m_InFlightRequests.erase(id.dump());
+        }
         return MakeError(id, JSONRPC_INTERNAL_ERROR, e.what());
     }
 }
@@ -534,6 +561,147 @@ nlohmann::json StdioTransport::HandleResourcesRead(
     };
 
     return MakeResponse(id, result);
+}
+
+nlohmann::json StdioTransport::HandleResourcesSubscribe(
+    const nlohmann::json& params, const nlohmann::json& id) {
+
+    namespace fs = std::filesystem;
+
+    if (!params.contains("uri") || !params["uri"].is_string()) {
+        return MakeError(id, JSONRPC_INVALID_PARAMS,
+                         "Missing required parameter: uri");
+    }
+
+    std::string uri = params["uri"].get<std::string>();
+
+    std::string relPath = uri;
+    if (relPath.rfind("file://", 0) == 0) {
+        relPath = relPath.substr(7);
+    }
+
+    fs::path fullPath = (fs::path(m_ResourceRoot) / relPath).lexically_normal();
+
+    std::error_code ec;
+    fs::path canonRoot = fs::canonical(fs::path(m_ResourceRoot), ec);
+    if (ec) {
+        return MakeError(id, JSONRPC_INTERNAL_ERROR, "Cannot resolve resource root");
+    }
+
+    if (!fs::exists(fullPath, ec)) {
+        return MakeError(id, JSONRPC_INVALID_PARAMS, "Resource not found: " + uri);
+    }
+
+    fs::path canonPath = fs::canonical(fullPath, ec);
+    if (ec || canonPath.string().rfind(canonRoot.string(), 0) != 0) {
+        return MakeError(id, JSONRPC_INVALID_PARAMS,
+                         "Access denied: path outside resource root");
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(m_SubscriptionMutex);
+        m_SubscribedUris.insert(uri);
+        auto mtime = fs::last_write_time(canonPath, ec);
+        if (!ec) {
+            m_SubscribedMtimes[uri] = mtime;
+        }
+    }
+
+    StartResourceWatcher();
+
+    return MakeResponse(id, nlohmann::json::object());
+}
+
+nlohmann::json StdioTransport::HandleResourcesUnsubscribe(
+    const nlohmann::json& params, const nlohmann::json& id) {
+
+    if (!params.contains("uri") || !params["uri"].is_string()) {
+        return MakeError(id, JSONRPC_INVALID_PARAMS,
+                         "Missing required parameter: uri");
+    }
+
+    std::string uri = params["uri"].get<std::string>();
+
+    {
+        std::lock_guard<std::mutex> lock(m_SubscriptionMutex);
+        m_SubscribedUris.erase(uri);
+        m_SubscribedMtimes.erase(uri);
+
+        if (m_SubscribedUris.empty()) {
+            StopResourceWatcher();
+        }
+    }
+
+    return MakeResponse(id, nlohmann::json::object());
+}
+
+void StdioTransport::StartResourceWatcher() {
+    if (m_ResourceWatcherThread.joinable()) return;
+
+    m_ResourceWatcherStop = false;
+
+    m_ResourceWatcherThread = std::thread([this]() {
+        namespace fs = std::filesystem;
+
+        while (!m_ResourceWatcherStop.load()) {
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(kResourceWatchIntervalMs));
+            if (m_ResourceWatcherStop.load()) break;
+
+            std::lock_guard<std::mutex> lock(m_SubscriptionMutex);
+
+            for (const auto& uri : m_SubscribedUris) {
+                std::string relPath = uri;
+                if (relPath.rfind("file://", 0) == 0)
+                    relPath = relPath.substr(7);
+
+                fs::path fullPath = (fs::path(m_ResourceRoot) / relPath).lexically_normal();
+                std::error_code ec;
+                if (!fs::exists(fullPath, ec)) continue;
+
+                auto mtime = fs::last_write_time(fullPath, ec);
+                if (ec) continue;
+
+                auto it = m_SubscribedMtimes.find(uri);
+                if (it != m_SubscribedMtimes.end() && it->second == mtime)
+                    continue;
+
+                m_SubscribedMtimes[uri] = mtime;
+
+                nlohmann::json notification = {
+                    {"jsonrpc", "2.0"},
+                    {"method", "notifications/resources/updated"},
+                    {"params", {{"uri", uri}}}
+                };
+                SendMessage(notification);
+            }
+        }
+    });
+}
+
+void StdioTransport::StopResourceWatcher() {
+    m_ResourceWatcherStop = true;
+    if (m_ResourceWatcherThread.joinable()) {
+        m_ResourceWatcherThread.join();
+    }
+}
+
+void StdioTransport::HandleCancelNotification(const nlohmann::json& params) {
+    if (!params.contains("requestId")) return;
+
+    std::string cancelledId = params["requestId"].dump();
+    std::string toolName;
+    {
+        std::lock_guard<std::mutex> lock(m_InFlightMutex);
+        auto it = m_InFlightRequests.find(cancelledId);
+        if (it == m_InFlightRequests.end()) return;
+        toolName = it->second;
+    }
+
+    auto cmd = m_Registry->Resolve(toolName);
+    if (cmd) {
+        cmd->Cancel(cancelledId);
+    }
 }
 
 // ---------------------------------------------------------------------------

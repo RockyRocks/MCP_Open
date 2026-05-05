@@ -10,7 +10,10 @@
 #include <string>
 #include <vector>
 
-class StdioMCPAdapter : public ICommandStrategy {
+class StdioMCPAdapter
+    : public ICommandStrategy
+    , public std::enable_shared_from_this<StdioMCPAdapter>
+{
 public:
     static constexpr int kDefaultTimeoutMs  = 30000;
     static constexpr int kMaxRespawnRetries = 3;
@@ -24,6 +27,8 @@ public:
 
     std::future<nlohmann::json> ExecuteAsync(const nlohmann::json& request) override;
     ToolMetadata                GetMetadata() const override;
+    void Cancel(const std::string& requestId) override;
+    void Shutdown() override;
 
     static std::vector<ScriptPluginToolInfo> DiscoverTools(
         const std::string& pluginName,
@@ -47,4 +52,8 @@ private:
     std::atomic<int>                m_NextId{1};
     int                             m_RespawnCount{0};
     bool                            m_Initialized{false};
+    std::atomic<bool>               m_ShutdownRequested{false};
+
+    std::mutex                      m_CancelMutex;
+    std::map<std::string, int>      m_InFlightRequests;
 };

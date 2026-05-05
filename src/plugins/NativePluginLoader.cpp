@@ -3,41 +3,14 @@
 #include <plugins/NativePluginAdapter.h>
 #include <core/Logger.h>
 
-#include <atomic>
 #include <filesystem>
-#include <functional>
-#include <mutex>
 #include <set>
-#include <thread>
 #include <unordered_set>
 
 namespace fs = std::filesystem;
 
-// ---------------------------------------------------------------------------
-// Module-level state for the watcher thread
-// ---------------------------------------------------------------------------
-
 namespace {
 
-std::function<void(const nlohmann::json&)> g_NotifyCallback;
-std::mutex                                 g_NotifyMutex;
-
-std::atomic<bool>  g_WatcherStop{false};
-std::thread        g_WatcherThread;
-std::mutex         g_WatcherMutex;   // guards g_WatcherThread state
-
-void FireNotification(const nlohmann::json& payload) {
-    Logger::GetInstance().Log("[NativePlugin] plugin loaded: "
-                              + payload.dump());
-    std::lock_guard<std::mutex> lock(g_NotifyMutex);
-    if (g_NotifyCallback) {
-        try {
-            g_NotifyCallback(payload);
-        } catch (...) {}
-    }
-}
-
-// Returns true if the filename looks like a loadable plugin binary.
 bool IsPluginBinary(const fs::path& p) {
     auto ext = p.extension().string();
 #ifdef _WIN32
@@ -51,15 +24,23 @@ bool IsPluginBinary(const fs::path& p) {
 
 } // anonymous namespace
 
-// ---------------------------------------------------------------------------
-// NativePluginLoader
-// ---------------------------------------------------------------------------
+NativePluginLoader::~NativePluginLoader() {
+    StopWatcher();
+}
 
 void NativePluginLoader::SetNotifyCallback(
     std::function<void(const nlohmann::json&)> cb)
 {
-    std::lock_guard<std::mutex> lock(g_NotifyMutex);
-    g_NotifyCallback = std::move(cb);
+    std::lock_guard<std::mutex> lock(m_NotifyMutex);
+    m_NotifyCallback = std::move(cb);
+}
+
+void NativePluginLoader::FireNotification(const nlohmann::json& payload) {
+    Logger::GetInstance().Log("[NativePlugin] plugin loaded: " + payload.dump());
+    std::lock_guard<std::mutex> lock(m_NotifyMutex);
+    if (m_NotifyCallback) {
+        try { m_NotifyCallback(payload); } catch (...) {}
+    }
 }
 
 bool NativePluginLoader::LoadOne(const std::string& dlPath,
@@ -68,7 +49,7 @@ bool NativePluginLoader::LoadOne(const std::string& dlPath,
 {
     auto plugin = DlPlugin::Load(dlPath);
     if (!plugin) {
-        return false;  // DlPlugin::Load already logged the reason
+        return false;
     }
 
     auto tools = plugin->ListTools();
@@ -78,7 +59,6 @@ bool NativePluginLoader::LoadOne(const std::string& dlPath,
         return false;
     }
 
-    // Wrap plugin in shared_ptr so all adapters share ownership
     auto sharedPlugin = std::shared_ptr<IPlugin>(std::move(plugin));
 
     nlohmann::json toolNames = nlohmann::json::array();
@@ -101,7 +81,6 @@ bool NativePluginLoader::LoadOne(const std::string& dlPath,
         return false;
     }
 
-    // Build and fire the plugin-loaded notification
     nlohmann::json notification = {
         {"event",  "plugin_loaded"},
         {"plugin", {
@@ -159,18 +138,16 @@ void NativePluginLoader::LoadAll(const std::string& pluginsDir,
 void NativePluginLoader::StartWatcher(const std::string& pluginsDir,
                                       std::shared_ptr<CommandRegistry> registry)
 {
-    std::lock_guard<std::mutex> lock(g_WatcherMutex);
-    if (g_WatcherThread.joinable()) {
-        return;  // already running
+    std::lock_guard<std::mutex> lock(m_WatcherMutex);
+    if (m_WatcherThread.joinable()) {
+        return;
     }
 
-    g_WatcherStop = false;
+    m_WatcherStop = false;
 
-    g_WatcherThread = std::thread([pluginsDir, registry]() {
-        // Remember which paths we have already loaded
+    m_WatcherThread = std::thread([this, pluginsDir, registry]() {
         std::unordered_set<std::string> loaded;
 
-        // Seed the set with whatever is already present at watcher start
         fs::path root(pluginsDir);
         std::error_code ec;
         fs::path canonRoot = fs::canonical(root, ec);
@@ -193,11 +170,11 @@ void NativePluginLoader::StartWatcher(const std::string& pluginsDir,
             }
         }
 
-        while (!g_WatcherStop.load()) {
+        while (!m_WatcherStop.load()) {
             std::this_thread::sleep_for(
-                std::chrono::milliseconds(NativePluginLoader::kWatchIntervalMs));
+                std::chrono::milliseconds(kWatchIntervalMs));
 
-            if (g_WatcherStop.load()) break;
+            if (m_WatcherStop.load()) break;
             if (!fs::exists(root, ec) || !fs::is_directory(root, ec)) continue;
 
             for (const auto& entry : fs::directory_iterator(root, ec)) {
@@ -224,7 +201,7 @@ void NativePluginLoader::StartWatcher(const std::string& pluginsDir,
                     Logger::GetInstance().Log(
                         "[NativePlugin] watcher detected new plugin: " + path);
 
-                    if (NativePluginLoader::LoadOne(path, *registry, "runtime")) {
+                    if (LoadOne(path, *registry, "runtime")) {
                         loaded.insert(path);
                     }
                 }
@@ -236,9 +213,9 @@ void NativePluginLoader::StartWatcher(const std::string& pluginsDir,
 }
 
 void NativePluginLoader::StopWatcher() {
-    g_WatcherStop = true;
-    std::lock_guard<std::mutex> lock(g_WatcherMutex);
-    if (g_WatcherThread.joinable()) {
-        g_WatcherThread.join();
+    m_WatcherStop = true;
+    std::lock_guard<std::mutex> lock(m_WatcherMutex);
+    if (m_WatcherThread.joinable()) {
+        m_WatcherThread.join();
     }
 }

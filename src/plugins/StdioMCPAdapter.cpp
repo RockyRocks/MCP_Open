@@ -1,6 +1,7 @@
 #include <plugins/StdioMCPAdapter.h>
 #include <commands/ToolMetadata.h>
 #include <core/Logger.h>
+#include <core/Version.h>
 
 #include <future>
 #include <stdexcept>
@@ -52,7 +53,7 @@ bool StdioMCPAdapter::EnsureRunning() {
             {"params", {
                 {"protocolVersion", "2024-11-05"},
                 {"capabilities", nlohmann::json::object()},
-                {"clientInfo", {{"name", "mcp-server-cmake"}, {"version", "1.0.0"}}}
+                {"clientInfo", {{"name", "mcp-server-cmake"}, {"version", MCP_VERSION_STRING}}}
             }}
         };
 
@@ -110,6 +111,16 @@ nlohmann::json StdioMCPAdapter::SendRequest(const std::string& method,
     }
 
     int id = m_NextId.fetch_add(1);
+
+    std::string externalRequestId;
+    if (params.contains("_requestId")) {
+        externalRequestId = params["_requestId"].get<std::string>();
+        if (!externalRequestId.empty()) {
+            std::lock_guard<std::mutex> cLock(m_CancelMutex);
+            m_InFlightRequests[externalRequestId] = id;
+        }
+    }
+
     nlohmann::json req = {
         {"jsonrpc", "2.0"},
         {"id", id},
@@ -117,7 +128,15 @@ nlohmann::json StdioMCPAdapter::SendRequest(const std::string& method,
         {"params", params}
     };
 
+    auto cleanupInFlight = [&]() {
+        if (!externalRequestId.empty()) {
+            std::lock_guard<std::mutex> cLock(m_CancelMutex);
+            m_InFlightRequests.erase(externalRequestId);
+        }
+    };
+
     if (!m_Pipe->WriteLine(req.dump())) {
+        cleanupInFlight();
         m_Initialized = false;
         return {
             {"isError", true},
@@ -128,6 +147,7 @@ nlohmann::json StdioMCPAdapter::SendRequest(const std::string& method,
 
     std::string response;
     if (!m_Pipe->ReadLine(response, kDefaultTimeoutMs)) {
+        cleanupInFlight();
         m_Initialized = false;
         return {
             {"isError", true},
@@ -135,6 +155,8 @@ nlohmann::json StdioMCPAdapter::SendRequest(const std::string& method,
                           {"text", "Timeout waiting for response from '" + m_PluginName + "'"}}}}
         };
     }
+
+    cleanupInFlight();
 
     try {
         auto result = nlohmann::json::parse(response);
@@ -161,23 +183,60 @@ nlohmann::json StdioMCPAdapter::SendRequest(const std::string& method,
     }
 }
 
+void StdioMCPAdapter::Cancel(const std::string& requestId) {
+    if (requestId.empty()) return;
+
+    std::lock_guard<std::mutex> lock(m_CancelMutex);
+    auto it = m_InFlightRequests.find(requestId);
+    if (it == m_InFlightRequests.end()) return;
+
+    int jsonRpcId = it->second;
+
+    std::lock_guard<std::mutex> pipeLock(m_PipeMutex);
+    if (m_Pipe && m_Pipe->IsRunning()) {
+        nlohmann::json notification = {
+            {"jsonrpc", "2.0"},
+            {"method", "notifications/cancelled"},
+            {"params", {{"requestId", jsonRpcId}}}
+        };
+        m_Pipe->WriteLine(notification.dump());
+    }
+}
+
+void StdioMCPAdapter::Shutdown() {
+    m_ShutdownRequested.store(true);
+    std::lock_guard<std::mutex> lock(m_PipeMutex);
+    m_Initialized = false;
+    m_Pipe.reset();
+    Logger::GetInstance().Log("[StdioMCP] " + m_PluginName + ": shutdown");
+}
+
 std::future<nlohmann::json> StdioMCPAdapter::ExecuteAsync(
     const nlohmann::json& request)
 {
-    auto toolName   = m_ToolName;
-    auto pluginName = m_PluginName;
+    auto self = shared_from_this();
+    std::string requestId = request.value("_requestId", "");
 
     return std::async(std::launch::async,
-        [this, toolName, request]() -> nlohmann::json {
+        [self, request, requestId]() -> nlohmann::json {
+            if (self->m_ShutdownRequested.load()) {
+                return {
+                    {"isError", true},
+                    {"content", {{{"type","text"},
+                                  {"text","MCP server '" + self->m_PluginName
+                                          + "' is shutting down"}}}}
+                };
+            }
+
             nlohmann::json args = request.value("payload",
                                   request.value("arguments", nlohmann::json::object()));
 
             nlohmann::json params = {
-                {"name", toolName},
+                {"name", self->m_ToolName},
                 {"arguments", args}
             };
 
-            return SendRequest("tools/call", params);
+            return self->SendRequest("tools/call", params);
         });
 }
 
@@ -206,7 +265,7 @@ std::vector<ScriptPluginToolInfo> StdioMCPAdapter::DiscoverTools(
         {"params", {
             {"protocolVersion", "2024-11-05"},
             {"capabilities", nlohmann::json::object()},
-            {"clientInfo", {{"name", "mcp-server-cmake"}, {"version", "1.0.0"}}}
+            {"clientInfo", {{"name", "mcp-server-cmake"}, {"version", MCP_VERSION_STRING}}}
         }}
     };
 

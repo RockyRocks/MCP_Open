@@ -218,7 +218,7 @@ TEST(NativePluginAdapterTest, TimeoutReturnsIsErrorAndIncrementsFaults) {
 TEST(NativePluginLoaderTest, LoadAllWithNonExistentDirDoesNotCrash) {
     CommandRegistry registry;
     EXPECT_NO_THROW(
-        NativePluginLoader::LoadAll("/nonexistent/path/that/does/not/exist",
+        NativePluginLoader().LoadAll("/nonexistent/path/that/does/not/exist",
                                     registry));
 }
 
@@ -229,7 +229,7 @@ TEST(NativePluginLoaderTest, LoadAllWithEmptyDirRegistersNothing) {
     fs::create_directories(tmp);
 
     CommandRegistry registry;
-    NativePluginLoader::LoadAll(tmp.string(), registry);
+    NativePluginLoader().LoadAll(tmp.string(), registry);
     EXPECT_TRUE(registry.ListCommands().empty());
 
     fs::remove_all(tmp);
@@ -237,7 +237,7 @@ TEST(NativePluginLoaderTest, LoadAllWithEmptyDirRegistersNothing) {
 
 TEST(NativePluginLoaderTest, LoadOneWithNonExistentPathReturnsFalse) {
     CommandRegistry registry;
-    bool ok = NativePluginLoader::LoadOne(
+    bool ok = NativePluginLoader().LoadOne(
         "/nonexistent/plugin.dll", registry, "startup");
     EXPECT_FALSE(ok);
 }
@@ -251,7 +251,7 @@ TEST(NativePluginLoaderTest, LoadOneWithNonBinaryFileReturnsFalse) {
     }
 
     CommandRegistry registry;
-    bool ok = NativePluginLoader::LoadOne(tmp.string(), registry, "startup");
+    bool ok = NativePluginLoader().LoadOne(tmp.string(), registry, "startup");
     EXPECT_FALSE(ok);
 
     fs::remove(tmp);
@@ -271,24 +271,19 @@ TEST(NativePluginLoaderTest, NotifyCallbackFiresOnSuccessfulLoadOne) {
     std::atomic<int> callCount{0};
     nlohmann::json   lastPayload;
 
-    NativePluginLoader::SetNotifyCallback(
+    NativePluginLoader loader;
+    loader.SetNotifyCallback(
         [&](const nlohmann::json& payload) {
             lastPayload = payload;
             ++callCount;
         });
 
-    // Simulate what LoadOne does when it succeeds (directly fire the
-    // notification using the internal path we can exercise via LoadAll on
-    // a dir that has our mock plugin).  Since we can't load a real DL,
-    // we verify callback was stored by checking a no-op load doesn't fire it.
-    NativePluginLoader::LoadAll("/nonexistent", /* won't find anything */
-                                *std::make_shared<CommandRegistry>());
+    loader.LoadAll("/nonexistent",
+                   *std::make_shared<CommandRegistry>());
 
-    // No plugin was found, so callback should NOT have been called yet.
     EXPECT_EQ(callCount.load(), 0);
 
-    // Reset callback
-    NativePluginLoader::SetNotifyCallback(nullptr);
+    loader.SetNotifyCallback(nullptr);
 }
 
 TEST(NativePluginLoaderTest, NotifyPayloadHasExpectedShape) {

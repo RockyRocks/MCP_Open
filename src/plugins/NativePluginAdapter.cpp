@@ -17,30 +17,51 @@ NativePluginAdapter::NativePluginAdapter(std::shared_ptr<IPlugin> plugin,
     , m_TimeoutSeconds(timeoutSeconds)
 {}
 
+void NativePluginAdapter::Cancel(const std::string& requestId) {
+    std::lock_guard<std::mutex> lock(m_CancelMutex);
+    m_CancelledRequests.insert(requestId);
+}
+
+void NativePluginAdapter::Shutdown() {
+    m_ShutdownRequested.store(true);
+}
+
 std::future<nlohmann::json> NativePluginAdapter::ExecuteAsync(
     const nlohmann::json& request)
 {
-    return std::async(std::launch::async, [this, request]() -> nlohmann::json {
-        if (IsDisabled()) {
+    auto self = shared_from_this();
+    std::string requestId = request.value("_requestId", "");
+
+    return std::async(std::launch::async, [self, request, requestId]() -> nlohmann::json {
+        if (self->m_ShutdownRequested.load()) {
             return {
                 {"isError", true},
                 {"content", {{{"type","text"},
-                              {"text","Plugin tool '" + m_ToolName
+                              {"text","Plugin tool '" + self->m_ToolName
+                                      + "' is shutting down"}}}}
+            };
+        }
+
+        if (self->IsDisabled()) {
+            return {
+                {"isError", true},
+                {"content", {{{"type","text"},
+                              {"text","Plugin tool '" + self->m_ToolName
                                       + "' is disabled after "
                                       + std::to_string(kMaxFaults)
                                       + " consecutive faults"}}}}
             };
         }
 
-        int active = m_ActiveThreads.load();
+        int active = self->m_ActiveThreads.load();
         if (active >= kMaxConcurrentCalls) {
             Logger::GetInstance().Log(
-                "[NativePlugin] '" + m_ToolName + "' rejected: "
+                "[NativePlugin] '" + self->m_ToolName + "' rejected: "
                 + std::to_string(active) + " zombie threads outstanding");
             return {
                 {"isError", true},
                 {"content", {{{"type","text"},
-                              {"text","Plugin tool '" + m_ToolName
+                              {"text","Plugin tool '" + self->m_ToolName
                                       + "' has too many outstanding calls ("
                                       + std::to_string(active) + ")"}}}}
             };
@@ -49,66 +70,90 @@ std::future<nlohmann::json> NativePluginAdapter::ExecuteAsync(
         auto promise = std::make_shared<std::promise<nlohmann::json>>();
         std::future<nlohmann::json> innerFuture = promise->get_future();
 
-        auto activeCounter = &m_ActiveThreads;
-        ++(*activeCounter);
+        ++self->m_ActiveThreads;
 
-        std::thread([this, request, promise, activeCounter]() mutable {
-            try {
-                promise->set_value(m_Plugin->Execute(m_ToolName, request));
-            } catch (...) {
-                try {
-                    promise->set_exception(std::current_exception());
-                } catch (...) {}
+        auto weakSelf = std::weak_ptr<NativePluginAdapter>(self);
+        std::thread([weakSelf, request, promise]() mutable {
+            auto pin = weakSelf.lock();
+            if (!pin) {
+                try { promise->set_value({{"isError", true},
+                    {"content", {{{"type","text"},{"text","Adapter destroyed"}}}}}); } catch (...) {}
+                return;
             }
-            --(*activeCounter);
+            try {
+                promise->set_value(pin->m_Plugin->Execute(pin->m_ToolName, request));
+            } catch (...) {
+                try { promise->set_exception(std::current_exception()); } catch (...) {}
+            }
+            --pin->m_ActiveThreads;
         }).detach();
 
         auto status = innerFuture.wait_for(
-            std::chrono::seconds(m_TimeoutSeconds));
+            std::chrono::seconds(self->m_TimeoutSeconds));
 
         if (status == std::future_status::timeout) {
-            int faults = ++m_FaultCount;
-            int zombies = m_ActiveThreads.load();
+            bool cancelled = false;
+            if (!requestId.empty()) {
+                std::lock_guard<std::mutex> lock(self->m_CancelMutex);
+                cancelled = self->m_CancelledRequests.erase(requestId) > 0;
+            }
+
+            if (cancelled) {
+                return {
+                    {"isError", true},
+                    {"content", {{{"type","text"},
+                                  {"text","Plugin tool '" + self->m_ToolName
+                                          + "' was cancelled"}}}}
+                };
+            }
+
+            int faults = ++self->m_FaultCount;
+            int zombies = self->m_ActiveThreads.load();
             Logger::GetInstance().Log(
-                "[NativePlugin] timeout executing '" + m_ToolName
+                "[NativePlugin] timeout executing '" + self->m_ToolName
                 + "' (fault " + std::to_string(faults) + "/"
                 + std::to_string(kMaxFaults)
                 + ", zombie threads: " + std::to_string(zombies) + ")");
             return {
                 {"isError", true},
                 {"content", {{{"type","text"},
-                              {"text","Plugin tool '" + m_ToolName
+                              {"text","Plugin tool '" + self->m_ToolName
                                       + "' timed out after "
-                                      + std::to_string(m_TimeoutSeconds)
+                                      + std::to_string(self->m_TimeoutSeconds)
                                       + "s"}}}}
             };
+        }
+
+        if (!requestId.empty()) {
+            std::lock_guard<std::mutex> lock(self->m_CancelMutex);
+            self->m_CancelledRequests.erase(requestId);
         }
 
         try {
             return innerFuture.get();
         } catch (const std::exception& ex) {
-            int faults = ++m_FaultCount;
+            int faults = ++self->m_FaultCount;
             Logger::GetInstance().Log(
-                "[NativePlugin] exception in '" + m_ToolName
+                "[NativePlugin] exception in '" + self->m_ToolName
                 + "': " + ex.what()
                 + " (fault " + std::to_string(faults) + "/"
                 + std::to_string(kMaxFaults) + ")");
             return {
                 {"isError", true},
                 {"content", {{{"type","text"},
-                              {"text","Plugin tool '" + m_ToolName
+                              {"text","Plugin tool '" + self->m_ToolName
                                       + "' threw: " + ex.what()}}}}
             };
         } catch (...) {
-            int faults = ++m_FaultCount;
+            int faults = ++self->m_FaultCount;
             Logger::GetInstance().Log(
-                "[NativePlugin] unknown exception in '" + m_ToolName
+                "[NativePlugin] unknown exception in '" + self->m_ToolName
                 + "' (fault " + std::to_string(faults) + "/"
                 + std::to_string(kMaxFaults) + ")");
             return {
                 {"isError", true},
                 {"content", {{{"type","text"},
-                              {"text","Plugin tool '" + m_ToolName
+                              {"text","Plugin tool '" + self->m_ToolName
                                       + "' threw an unknown exception"}}}}
             };
         }

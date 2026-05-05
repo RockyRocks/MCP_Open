@@ -1,10 +1,14 @@
 #pragma once
 
 #include <atomic>
+#include <filesystem>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -53,6 +57,12 @@ private:
     nlohmann::json HandlePromptsGet(const nlohmann::json& params, const nlohmann::json& id);
     nlohmann::json HandleResourcesList(const nlohmann::json& params, const nlohmann::json& id);
     nlohmann::json HandleResourcesRead(const nlohmann::json& params, const nlohmann::json& id);
+    nlohmann::json HandleResourcesSubscribe(const nlohmann::json& params, const nlohmann::json& id);
+    nlohmann::json HandleResourcesUnsubscribe(const nlohmann::json& params, const nlohmann::json& id);
+    void HandleCancelNotification(const nlohmann::json& params);
+
+    void StartResourceWatcher();
+    void StopResourceWatcher();
 
     // JSON-RPC helpers
     nlohmann::json MakeResponse(const nlohmann::json& id, const nlohmann::json& result);
@@ -80,4 +90,15 @@ private:
     bool m_Initialized = false;
     std::atomic<bool> m_Running{false};
     std::mutex m_WriteMutex;
+
+    std::mutex m_InFlightMutex;
+    std::map<std::string, std::string> m_InFlightRequests;
+    uint64_t m_NextRequestId{1};
+
+    std::mutex m_SubscriptionMutex;
+    std::set<std::string> m_SubscribedUris;
+    std::map<std::string, std::filesystem::file_time_type> m_SubscribedMtimes;
+    std::atomic<bool> m_ResourceWatcherStop{false};
+    std::thread m_ResourceWatcherThread;
+    static constexpr int kResourceWatchIntervalMs = 2000;
 };

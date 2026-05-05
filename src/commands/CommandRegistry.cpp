@@ -8,9 +8,14 @@ void CommandRegistry::RegisterCommand(const std::string& name,
         throw std::invalid_argument("Command name cannot be empty");
     }
     std::unique_lock lock(m_Mutex);
-    if (m_Commands.count(name)) {
+    auto it = m_Commands.find(name);
+    if (it != m_Commands.end()) {
         Logger::GetInstance().Log(
             "[CommandRegistry] Tool '" + name + "' already registered — overwriting");
+        auto old = std::move(it->second);
+        lock.unlock();
+        old->Shutdown();
+        lock.lock();
     }
     m_Commands[name] = std::move(command);
 }

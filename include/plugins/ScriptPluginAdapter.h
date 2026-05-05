@@ -1,6 +1,8 @@
 #pragma once
 #include <commands/ICommandStrategy.h>
 #include <plugins/ScriptPlugin.h>
+#include <mutex>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -36,9 +38,9 @@ public:
                         std::string entrypoint,
                         ScriptPluginToolInfo toolInfo);
 
-    // ICommandStrategy
     std::future<nlohmann::json> ExecuteAsync(const nlohmann::json& request) override;
     ToolMetadata                GetMetadata() const override;
+    void Cancel(const std::string& requestId) override;
 
     /// Called by ScriptPluginLoader at load time — runs --mcp-list once per plugin.
     static std::vector<ScriptPluginToolInfo> DiscoverTools(
@@ -69,4 +71,7 @@ private:
     std::string          m_Runtime;
     std::string          m_Entrypoint;
     ScriptPluginToolInfo m_ToolInfo;
+
+    std::mutex           m_CancelMutex;
+    std::set<std::string> m_CancelledRequests;
 };

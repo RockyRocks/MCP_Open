@@ -262,12 +262,21 @@ ToolMetadata ScriptPluginAdapter::GetMetadata() const {
     return meta;
 }
 
+void ScriptPluginAdapter::Cancel(const std::string& requestId) {
+    std::lock_guard<std::mutex> lock(m_CancelMutex);
+    m_CancelledRequests.insert(requestId);
+}
+
 std::future<nlohmann::json> ScriptPluginAdapter::ExecuteAsync(const nlohmann::json& request) {
     auto runtime    = m_Runtime;
     auto entrypoint = m_Entrypoint;
     auto toolName   = m_ToolInfo.m_Name;
+    std::string requestId = request.value("_requestId", "");
+    auto cancelMutex = &m_CancelMutex;
+    auto cancelledSet = &m_CancelledRequests;
 
-    return std::async(std::launch::async, [runtime, entrypoint, toolName, request]()
+    return std::async(std::launch::async, [runtime, entrypoint, toolName, request,
+                                           requestId, cancelMutex, cancelledSet]()
         -> nlohmann::json
     {
         nlohmann::json args = request.value("payload",
@@ -303,6 +312,14 @@ std::future<nlohmann::json> ScriptPluginAdapter::ExecuteAsync(const nlohmann::js
         }).detach();
 
         auto status = outputFuture.wait_for(std::chrono::seconds(kTimeoutSeconds));
+
+        if (!requestId.empty()) {
+            std::lock_guard<std::mutex> lock(*cancelMutex);
+            if (cancelledSet->erase(requestId) > 0) {
+                return ErrorResponse("Script tool '" + toolName + "' was cancelled");
+            }
+        }
+
         if (status == std::future_status::timeout) {
             Logger::GetInstance().Log(
                 "[ScriptPlugin] timeout executing '" + toolName

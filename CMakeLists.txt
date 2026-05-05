@@ -1,13 +1,20 @@
 cmake_minimum_required(VERSION 3.16)
 cmake_policy(SET CMP0077 NEW)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
-project(MCP_Server_CMake LANGUAGES CXX)
+project(MCP_Server_CMake VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Build all static libraries with -fPIC so they can be linked into shared libs (mcp_capi)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# Generate Version.h from template
+configure_file(
+  "${PROJECT_SOURCE_DIR}/include/core/Version.h.in"
+  "${CMAKE_BINARY_DIR}/generated/core/Version.h"
+  @ONLY
+)
 
 option(USE_UWS "Use uWebSockets (async) server" OFF)
 option(BUILD_CSHARP "Build C# wrapper (requires dotnet SDK)" ON)
@@ -148,7 +155,10 @@ add_library(core STATIC ${CORE_SOURCES})
 if(UNITY_BUILD)
   set_target_properties(core PROPERTIES UNITY_BUILD ON)
 endif()
-target_include_directories(core PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_include_directories(core PUBLIC
+  ${PROJECT_SOURCE_DIR}/include
+  "${CMAKE_BINARY_DIR}/generated"
+)
 target_link_libraries(core PUBLIC
   nlohmann_json::nlohmann_json
   nlohmann_json_schema_validator

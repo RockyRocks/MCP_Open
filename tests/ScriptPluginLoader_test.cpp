@@ -91,13 +91,13 @@ protected:
 TEST_F(ScriptPluginLoaderTest, LoadAll_NonExistentDir_DoesNotCrash) {
     CommandRegistry reg;
     // Should silently return, not throw
-    EXPECT_NO_THROW(ScriptPluginLoader::LoadAll("/nonexistent/plugins/dir", reg));
+    EXPECT_NO_THROW(ScriptPluginLoader().LoadAll("/nonexistent/plugins/dir", reg));
     EXPECT_EQ(reg.ListCommands().size(), 0u);
 }
 
 TEST_F(ScriptPluginLoaderTest, LoadAll_EmptyDir_RegistersNothing) {
     CommandRegistry reg;
-    ScriptPluginLoader::LoadAll(m_TempDir.string(), reg);
+    ScriptPluginLoader().LoadAll(m_TempDir.string(), reg);
     EXPECT_EQ(reg.ListCommands().size(), 0u);
 }
 
@@ -106,7 +106,7 @@ TEST_F(ScriptPluginLoaderTest, LoadAll_NoPluginJson_Skipped) {
     fs::create_directories(m_TempDir / "no-json-plugin");
 
     CommandRegistry reg;
-    ScriptPluginLoader::LoadAll(m_TempDir.string(), reg);
+    ScriptPluginLoader().LoadAll(m_TempDir.string(), reg);
     EXPECT_EQ(reg.ListCommands().size(), 0u);
 }
 
@@ -119,7 +119,7 @@ TEST_F(ScriptPluginLoaderTest, LoadAll_PluginJsonWithoutRuntimeKey_Skipped) {
     });
 
     CommandRegistry reg;
-    ScriptPluginLoader::LoadAll(m_TempDir.string(), reg);
+    ScriptPluginLoader().LoadAll(m_TempDir.string(), reg);
     EXPECT_EQ(reg.ListCommands().size(), 0u);
 }
 
@@ -132,7 +132,7 @@ TEST_F(ScriptPluginLoaderTest, LoadAll_MissingEntrypoint_Skipped) {
     });
 
     CommandRegistry reg;
-    EXPECT_NO_THROW(ScriptPluginLoader::LoadAll(m_TempDir.string(), reg));
+    EXPECT_NO_THROW(ScriptPluginLoader().LoadAll(m_TempDir.string(), reg));
     EXPECT_EQ(reg.ListCommands().size(), 0u);
 }
 
@@ -144,7 +144,7 @@ TEST_F(ScriptPluginLoaderTest, LoadAll_MalformedJson_DoesNotCrash) {
     f << "{ this is not valid json !!!";
 
     CommandRegistry reg;
-    EXPECT_NO_THROW(ScriptPluginLoader::LoadAll(m_TempDir.string(), reg));
+    EXPECT_NO_THROW(ScriptPluginLoader().LoadAll(m_TempDir.string(), reg));
     EXPECT_EQ(reg.ListCommands().size(), 0u);
 }
 
@@ -158,7 +158,7 @@ TEST_F(ScriptPluginLoaderTest, LoadAll_EntrypointNotFound_Skipped) {
     });
 
     CommandRegistry reg;
-    EXPECT_NO_THROW(ScriptPluginLoader::LoadAll(m_TempDir.string(), reg));
+    EXPECT_NO_THROW(ScriptPluginLoader().LoadAll(m_TempDir.string(), reg));
     EXPECT_EQ(reg.ListCommands().size(), 0u);
 }
 
@@ -170,7 +170,7 @@ TEST_F(ScriptPluginLoaderTest, LoadAll_EchoPlugin_RegistersTwoTools) {
     if (!IsPythonAvailable()) GTEST_SKIP() << "Python not available";
 
     CommandRegistry reg;
-    ScriptPluginLoader::LoadAll(kTestPluginDir, reg);
+    ScriptPluginLoader().LoadAll(kTestPluginDir, reg);
 
     // The echo-plugin contributes echo_tool and fail_tool
     EXPECT_TRUE(reg.HasCommand("echo_tool"));
@@ -181,7 +181,7 @@ TEST_F(ScriptPluginLoaderTest, LoadAll_EchoPlugin_ToolsHaveScriptPluginSource) {
     if (!IsPythonAvailable()) GTEST_SKIP() << "Python not available";
 
     CommandRegistry reg;
-    ScriptPluginLoader::LoadAll(kTestPluginDir, reg);
+    ScriptPluginLoader().LoadAll(kTestPluginDir, reg);
 
     for (const auto& meta : reg.ListToolMetadata()) {
         EXPECT_EQ(meta.m_Source, ToolSource::ScriptPlugin)
@@ -193,7 +193,7 @@ TEST_F(ScriptPluginLoaderTest, LoadAll_EchoPlugin_ToolExecutable) {
     if (!IsPythonAvailable()) GTEST_SKIP() << "Python not available";
 
     CommandRegistry reg;
-    ScriptPluginLoader::LoadAll(kTestPluginDir, reg);
+    ScriptPluginLoader().LoadAll(kTestPluginDir, reg);
 
     ASSERT_TRUE(reg.HasCommand("echo_tool")) << "echo_tool not registered";
 
@@ -265,7 +265,7 @@ TEST_F(ScriptPluginLoaderTest, LoadAll_TwoScriptPlugins_BothRegistered) {
     );
 
     CommandRegistry reg;
-    ScriptPluginLoader::LoadAll(m_TempDir.string(), reg);
+    ScriptPluginLoader().LoadAll(m_TempDir.string(), reg);
 
     EXPECT_TRUE(reg.HasCommand("ping_tool")) << "ping_tool from plugin-a not registered";
     EXPECT_TRUE(reg.HasCommand("pong_tool")) << "pong_tool from plugin-b not registered";

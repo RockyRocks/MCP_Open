@@ -3,51 +3,42 @@
 #include <plugins/StdioMCPAdapter.h>
 #include <core/Logger.h>
 
-#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <functional>
-#include <memory>
-#include <mutex>
+#include <future>
 #include <sstream>
 #include <stdexcept>
-#include <thread>
 #include <unordered_map>
 
 namespace fs = std::filesystem;
 
-namespace {
-std::function<void(const nlohmann::json&)> g_ScriptNotifyCallback;
-std::mutex                                 g_ScriptNotifyMutex;
-std::atomic<bool>                          g_ScriptWatcherStop{false};
-std::thread                                g_ScriptWatcherThread;
-std::mutex                                 g_ScriptWatcherMutex;
-
-void FireScriptNotification(const nlohmann::json& payload) {
-    Logger::GetInstance().Log("[ScriptPlugin] plugin reloaded: " + payload.dump());
-    std::lock_guard<std::mutex> lock(g_ScriptNotifyMutex);
-    if (g_ScriptNotifyCallback) {
-        try { g_ScriptNotifyCallback(payload); } catch (...) {}
-    }
+ScriptPluginLoader::~ScriptPluginLoader() {
+    StopWatcher();
 }
-}  // anonymous namespace
 
 void ScriptPluginLoader::SetNotifyCallback(
     std::function<void(const nlohmann::json&)> cb) {
-    std::lock_guard<std::mutex> lock(g_ScriptNotifyMutex);
-    g_ScriptNotifyCallback = std::move(cb);
+    std::lock_guard<std::mutex> lock(m_NotifyMutex);
+    m_NotifyCallback = std::move(cb);
+}
+
+void ScriptPluginLoader::FireNotification(const nlohmann::json& payload) {
+    Logger::GetInstance().Log("[ScriptPlugin] plugin reloaded: " + payload.dump());
+    std::lock_guard<std::mutex> lock(m_NotifyMutex);
+    if (m_NotifyCallback) {
+        try { m_NotifyCallback(payload); } catch (...) {}
+    }
 }
 
 void ScriptPluginLoader::StartWatcher(const std::string& pluginsDir,
                                        std::shared_ptr<CommandRegistry> registry) {
-    std::lock_guard<std::mutex> lock(g_ScriptWatcherMutex);
-    if (g_ScriptWatcherThread.joinable()) return;
+    std::lock_guard<std::mutex> lock(m_WatcherMutex);
+    if (m_WatcherThread.joinable()) return;
 
-    g_ScriptWatcherStop = false;
+    m_WatcherStop = false;
 
-    g_ScriptWatcherThread = std::thread([pluginsDir, registry]() {
-        // Track plugin.json mtime for each plugin directory
+    m_WatcherThread = std::thread([this, pluginsDir, registry]() {
         std::unordered_map<std::string, fs::file_time_type> mtimeMap;
 
         fs::path root(pluginsDir);
@@ -62,11 +53,11 @@ void ScriptPluginLoader::StartWatcher(const std::string& pluginsDir,
             }
         }
 
-        while (!g_ScriptWatcherStop.load()) {
+        while (!m_WatcherStop.load()) {
             std::this_thread::sleep_for(
-                std::chrono::milliseconds(ScriptPluginLoader::kWatchIntervalMs));
+                std::chrono::milliseconds(kWatchIntervalMs));
 
-            if (g_ScriptWatcherStop.load()) break;
+            if (m_WatcherStop.load()) break;
             if (!fs::exists(root, ec) || !fs::is_directory(root, ec)) continue;
 
             for (const auto& entry : fs::directory_iterator(root, ec)) {
@@ -82,7 +73,6 @@ void ScriptPluginLoader::StartWatcher(const std::string& pluginsDir,
 
                 mtimeMap[jsonPath.string()] = lwt;
 
-                // New or changed plugin — reload it
                 try {
                     std::ifstream f(jsonPath);
                     if (!f.is_open()) continue;
@@ -139,7 +129,7 @@ void ScriptPluginLoader::StartWatcher(const std::string& pluginsDir,
                     }
 
                     if (reloaded > 0) {
-                        FireScriptNotification({
+                        FireNotification({
                             {"event",  "script_plugin_reloaded"},
                             {"plugin", name},
                             {"tools",  toolNames}
@@ -157,10 +147,10 @@ void ScriptPluginLoader::StartWatcher(const std::string& pluginsDir,
 }
 
 void ScriptPluginLoader::StopWatcher() {
-    g_ScriptWatcherStop = true;
-    std::lock_guard<std::mutex> lock(g_ScriptWatcherMutex);
-    if (g_ScriptWatcherThread.joinable()) {
-        g_ScriptWatcherThread.join();
+    m_WatcherStop = true;
+    std::lock_guard<std::mutex> lock(m_WatcherMutex);
+    if (m_WatcherThread.joinable()) {
+        m_WatcherThread.join();
     }
 }
 
@@ -181,17 +171,26 @@ void ScriptPluginLoader::LoadAll(const std::string& pluginsDir,
         return;
     }
 
-    int loaded = 0;
+    // Phase 1: Collect valid plugin descriptors
+    struct PluginDesc {
+        std::string name;
+        std::string runtime;
+        std::string entrypoint;     // absolute path
+        std::string command;        // for mcp-stdio: resolved executable
+        std::vector<std::string> spawnArgs; // for mcp-stdio
+        bool isMcpStdio = false;
+    };
+
+    std::vector<PluginDesc> descs;
+
     for (const auto& entry : fs::directory_iterator(pluginsDir)) {
         if (!entry.is_directory()) continue;
 
-        fs::path pluginDir  = entry.path();
-        fs::path jsonPath   = pluginDir / "plugin.json";
-
+        fs::path pluginDir = entry.path();
+        fs::path jsonPath  = pluginDir / "plugin.json";
         if (!fs::exists(jsonPath)) continue;
 
         try {
-            // Read plugin.json
             std::ifstream f(jsonPath);
             if (!f.is_open()) {
                 Logger::GetInstance().Log(
@@ -202,7 +201,6 @@ void ScriptPluginLoader::LoadAll(const std::string& pluginsDir,
             ss << f.rdbuf();
             auto pluginJson = nlohmann::json::parse(ss.str());
 
-            // No "runtime" key → native plugin or SKILL.md plugin → skip silently
             if (!pluginJson.contains("runtime")) continue;
 
             std::string runtime    = pluginJson["runtime"].get<std::string>();
@@ -217,7 +215,6 @@ void ScriptPluginLoader::LoadAll(const std::string& pluginsDir,
                 continue;
             }
 
-            // Resolve entrypoint to absolute path (relative to plugin directory)
             fs::path absEntrypoint = (pluginDir / entrypoint).lexically_normal();
             if (!fs::exists(absEntrypoint)) {
                 Logger::GetInstance().Log(
@@ -226,7 +223,6 @@ void ScriptPluginLoader::LoadAll(const std::string& pluginsDir,
                 continue;
             }
 
-            // Path traversal protection: ensure entrypoint resolves within plugins root
             std::error_code epEc;
             fs::path canonEntrypoint = fs::canonical(absEntrypoint, epEc);
             if (epEc || canonEntrypoint.string().rfind(canonRoot.string(), 0) != 0) {
@@ -236,63 +232,97 @@ void ScriptPluginLoader::LoadAll(const std::string& pluginsDir,
                 continue;
             }
 
+            PluginDesc desc;
+            desc.name       = name;
+            desc.runtime    = runtime;
+            desc.entrypoint = canonEntrypoint.string();
+
             if (runtime == "mcp-stdio") {
-                // Persistent MCP child process (FastMCP, mcp-python-sdk, etc.)
-                std::string cmd = ScriptPluginAdapter::GetRuntimeExecutable(
+                desc.isMcpStdio = true;
+                desc.command = ScriptPluginAdapter::GetRuntimeExecutable(
                     pluginJson.value("command_runtime", "python"));
-                std::vector<std::string> spawnArgs;
-                spawnArgs.push_back(absEntrypoint.string());
+                desc.spawnArgs.push_back(desc.entrypoint);
                 if (pluginJson.contains("args") && pluginJson["args"].is_array()) {
                     for (const auto& a : pluginJson["args"])
-                        if (a.is_string()) spawnArgs.push_back(a.get<std::string>());
+                        if (a.is_string()) desc.spawnArgs.push_back(a.get<std::string>());
                 }
-
-                auto tools = StdioMCPAdapter::DiscoverTools(name, cmd, spawnArgs);
-                if (tools.empty()) {
-                    Logger::GetInstance().Log(
-                        "[StdioMCP] No tools discovered from " + name + " (skipping)");
-                    continue;
-                }
-
-                for (const auto& tool : tools) {
-                    registry.RegisterCommand(
-                        tool.m_Name,
-                        std::make_shared<StdioMCPAdapter>(
-                            name, cmd, spawnArgs,
-                            tool.m_Name, tool.m_Description, tool.m_InputSchema));
-                    Logger::GetInstance().Log(
-                        "[StdioMCP] Registered tool '" + tool.m_Name
-                        + "' from plugin '" + name + "'");
-                    ++loaded;
-                }
-                continue;
             }
 
-            // Standard per-call script plugins (--mcp-list / --mcp-call protocol)
-            auto tools = ScriptPluginAdapter::DiscoverTools(
-                name, runtime, absEntrypoint.string());
-
-            if (tools.empty()) {
-                Logger::GetInstance().Log(
-                    "[ScriptPlugin] No tools discovered from " + name + " (skipping)");
-                continue;
-            }
-
-            for (const auto& tool : tools) {
-                registry.RegisterCommand(
-                    tool.m_Name,
-                    std::make_shared<ScriptPluginAdapter>(
-                        name, runtime, absEntrypoint.string(), tool));
-                Logger::GetInstance().Log(
-                    "[ScriptPlugin] Registered tool '" + tool.m_Name
-                    + "' from plugin '" + name + "'");
-                ++loaded;
-            }
+            descs.push_back(std::move(desc));
 
         } catch (const std::exception& e) {
             Logger::GetInstance().Log(
-                "[ScriptPlugin] Error loading from " + pluginDir.string()
+                "[ScriptPlugin] Error reading " + pluginDir.string()
                 + ": " + e.what());
+        }
+    }
+
+    if (descs.empty()) {
+        Logger::GetInstance().Log("[ScriptPlugin] Loaded 0 tool(s)");
+        return;
+    }
+
+    // Phase 2: Discover tools in parallel
+    struct DiscoveryResult {
+        size_t descIndex;
+        std::vector<ScriptPluginToolInfo> tools;
+    };
+
+    std::vector<std::future<DiscoveryResult>> futures;
+    futures.reserve(descs.size());
+
+    for (size_t i = 0; i < descs.size(); ++i) {
+        const auto& d = descs[i];
+        if (d.isMcpStdio) {
+            futures.push_back(std::async(std::launch::async,
+                [i, name = d.name, cmd = d.command, args = d.spawnArgs]() -> DiscoveryResult {
+                    return {i, StdioMCPAdapter::DiscoverTools(name, cmd, args)};
+                }));
+        } else {
+            futures.push_back(std::async(std::launch::async,
+                [i, name = d.name, runtime = d.runtime, ep = d.entrypoint]() -> DiscoveryResult {
+                    return {i, ScriptPluginAdapter::DiscoverTools(name, runtime, ep)};
+                }));
+        }
+    }
+
+    // Phase 3: Collect results and register tools
+    int loaded = 0;
+    for (auto& fut : futures) {
+        try {
+            auto result = fut.get();
+            const auto& desc = descs[result.descIndex];
+
+            if (result.tools.empty()) {
+                Logger::GetInstance().Log(
+                    "[ScriptPlugin] No tools discovered from " + desc.name + " (skipping)");
+                continue;
+            }
+
+            for (const auto& tool : result.tools) {
+                if (desc.isMcpStdio) {
+                    registry.RegisterCommand(
+                        tool.m_Name,
+                        std::make_shared<StdioMCPAdapter>(
+                            desc.name, desc.command, desc.spawnArgs,
+                            tool.m_Name, tool.m_Description, tool.m_InputSchema));
+                    Logger::GetInstance().Log(
+                        "[StdioMCP] Registered tool '" + tool.m_Name
+                        + "' from plugin '" + desc.name + "'");
+                } else {
+                    registry.RegisterCommand(
+                        tool.m_Name,
+                        std::make_shared<ScriptPluginAdapter>(
+                            desc.name, desc.runtime, desc.entrypoint, tool));
+                    Logger::GetInstance().Log(
+                        "[ScriptPlugin] Registered tool '" + tool.m_Name
+                        + "' from plugin '" + desc.name + "'");
+                }
+                ++loaded;
+            }
+        } catch (const std::exception& e) {
+            Logger::GetInstance().Log(
+                "[ScriptPlugin] Discovery failed: " + std::string(e.what()));
         }
     }
 

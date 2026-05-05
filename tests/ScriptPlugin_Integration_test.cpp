@@ -376,7 +376,7 @@ TEST(ScriptPluginIntegration, LoadAll_RegistersAllTools) {
     if (!IsPythonAvailable()) GTEST_SKIP() << "Python not available";
 
     CommandRegistry reg;
-    ScriptPluginLoader::LoadAll(kPluginsDir, reg);
+    ScriptPluginLoader().LoadAll(kPluginsDir, reg);
 
     // git-tools: 6, github-tools: 9, github-actions: 4,
     // filesystem-tools: 7, shell-tools: 4, build-tools: 3 = 33 total
@@ -395,7 +395,7 @@ TEST(ScriptPluginIntegration, LoadAll_AllToolsHaveScriptPluginSource) {
     if (!IsPythonAvailable()) GTEST_SKIP() << "Python not available";
 
     CommandRegistry reg;
-    ScriptPluginLoader::LoadAll(kPluginsDir, reg);
+    ScriptPluginLoader().LoadAll(kPluginsDir, reg);
 
     for (const auto& meta : reg.ListToolMetadata()) {
         EXPECT_EQ(meta.m_Source, ToolSource::ScriptPlugin)

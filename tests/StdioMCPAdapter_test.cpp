@@ -121,14 +121,15 @@ TEST(StdioMCPAdapter, ExecuteEcho_ReturnsMessage) {
         {"properties", {{"message", {{"type", "string"}}}}}
     };
 
-    StdioMCPAdapter adapter("stdio-echo", pyExe, {serverPath},
-                            "echo", "Echoes input", schema);
+    auto adapter = std::make_shared<StdioMCPAdapter>(
+        "stdio-echo", pyExe, std::vector<std::string>{serverPath},
+        "echo", "Echoes input", schema);
 
     nlohmann::json request = {
         {"command", "echo"},
         {"payload", {{"message", "hello_mcp"}}}
     };
-    auto result = adapter.ExecuteAsync(request).get();
+    auto result = adapter->ExecuteAsync(request).get();
 
     EXPECT_FALSE(result.value("isError", false));
     ASSERT_TRUE(result.contains("content"));
@@ -154,14 +155,15 @@ TEST(StdioMCPAdapter, ExecuteAdd_ReturnsSum) {
         {"properties", {{"a", {{"type", "number"}}}, {"b", {{"type", "number"}}}}}
     };
 
-    StdioMCPAdapter adapter("stdio-echo", pyExe, {serverPath},
-                            "add", "Adds two numbers", schema);
+    auto adapter = std::make_shared<StdioMCPAdapter>(
+        "stdio-echo", pyExe, std::vector<std::string>{serverPath},
+        "add", "Adds two numbers", schema);
 
     nlohmann::json request = {
         {"command", "add"},
         {"payload", {{"a", 17}, {"b", 25}}}
     };
-    auto result = adapter.ExecuteAsync(request).get();
+    auto result = adapter->ExecuteAsync(request).get();
 
     EXPECT_FALSE(result.value("isError", false));
     ASSERT_TRUE(result.contains("content"));
