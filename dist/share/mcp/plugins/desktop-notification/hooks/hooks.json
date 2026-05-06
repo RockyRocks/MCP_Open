@@ -1,0 +1,22 @@
+{
+  "_comment": "Claude Code hook definitions for desktop-notification plugin.",
+  "_comment2": "Each hook fires the PowerShell adapter, which posts to the MCP server",
+  "_comment3": "or falls back to a direct platform call if the server is not running.",
+
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/claude_adapter.ps1\" -HookType Stop",
+        "description": "Notify on Claude task completion"
+      }
+    ],
+    "Notification": [
+      {
+        "type": "command",
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/scripts/claude_adapter.ps1\" -HookType Notification",
+        "description": "Forward Claude notifications to desktop notification"
+      }
+    ]
+  }
+}

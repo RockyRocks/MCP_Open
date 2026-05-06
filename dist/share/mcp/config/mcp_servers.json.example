@@ -1,0 +1,18 @@
+{
+  "servers": [
+    {
+      "name": "analytics-server",
+      "url": "http://192.168.1.50:9001",
+      "capabilities": ["analyze", "summarize"],
+      "priority": 1,
+      "timeout_seconds": 30
+    },
+    {
+      "name": "code-server",
+      "url": "http://192.168.1.51:9001",
+      "capabilities": ["code_review", "refactor"],
+      "priority": 1,
+      "timeout_seconds": 60
+    }
+  ]
+}

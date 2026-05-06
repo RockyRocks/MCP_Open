@@ -120,7 +120,7 @@ All fetched automatically via CMake `FetchContent`:
 
 ## Quick Start
 
-### Build
+### Build from Source
 
 ```bash
 # Clone & configure
@@ -142,6 +142,21 @@ cmake -B build -G "Visual Studio 17 2022"
 cmake --build build --config Release
 build\Release\mcp_server.exe
 ```
+
+### Docker
+
+```bash
+# Build and run
+docker build -t mcp-server .
+docker run --rm -i mcp-server --stdio
+
+# Or use docker-compose (includes LiteLLM sidecar)
+docker compose up
+```
+
+### Pre-built Binaries
+
+Download platform archives from [GitHub Releases](../../releases). Extract and run `bin/mcp_server`.
 
 ### CMake Options
 

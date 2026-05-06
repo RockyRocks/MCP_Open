@@ -1,0 +1,6 @@
+#pragma once
+
+#define MCP_VERSION_MAJOR 1
+#define MCP_VERSION_MINOR 0
+#define MCP_VERSION_PATCH 0
+#define MCP_VERSION_STRING "1.0.0"

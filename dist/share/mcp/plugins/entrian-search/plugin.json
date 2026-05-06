@@ -1,0 +1,7 @@
+{
+  "name": "entrian-search",
+  "version": "1.0.0",
+  "description": "Full-text indexed code search using Entrian Source Search (ess.exe). Faster than grep on large monorepos — requires Entrian Source Search installed on the host machine.",
+  "author": { "name": "MCP Server" },
+  "keywords": ["entrian", "search", "code", "symbol", "fulltext", "index", "ess.exe"]
+}

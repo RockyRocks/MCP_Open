@@ -1,0 +1,8 @@
+build/
+dist/
+.github/
+.vscode/
+.git/
+*.md
+!README.md
+!BUILD.md

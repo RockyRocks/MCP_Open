@@ -339,3 +339,53 @@ if(BUILD_EXAMPLE_PLUGIN)
   endif()
   message(STATUS "Building example-plugin -> plugins/example-plugin/bin/")
 endif()
+
+# ------------------------------------------------------------------------------
+# Install targets
+# ------------------------------------------------------------------------------
+include(GNUInstallDirs)
+
+install(TARGETS mcp_server RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+install(TARGETS mcp_capi
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+install(FILES capi/include/mcp_capi.h
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/mcp
+)
+install(FILES include/plugins/PluginABI.h
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/mcp
+)
+install(FILES "${CMAKE_BINARY_DIR}/generated/core/Version.h"
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/mcp
+)
+
+install(DIRECTORY config/
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/mcp/config
+  FILES_MATCHING PATTERN "*.example"
+)
+
+install(DIRECTORY plugins/
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/mcp/plugins
+  PATTERN "bin" EXCLUDE
+  PATTERN "__pycache__" EXCLUDE
+  PATTERN "*.pyc" EXCLUDE
+  PATTERN "data" EXCLUDE
+)
+
+if(BUILD_DESKTOP_NOTIFICATION_PLUGIN)
+  install(TARGETS desktop-notification
+    RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/mcp/plugins/desktop-notification/bin
+    LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/mcp/plugins/desktop-notification/bin
+  )
+endif()
+
+if(BUILD_EXAMPLE_PLUGIN)
+  install(TARGETS example-plugin
+    RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/mcp/plugins/example-plugin/bin
+    LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/mcp/plugins/example-plugin/bin
+  )
+endif()

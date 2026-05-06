@@ -1,0 +1,7 @@
+{
+  "name": "agent-memory",
+  "version": "1.0.0",
+  "description": "Persistent key-value memory store for cross-session agent context",
+  "runtime": "python",
+  "entrypoint": "scripts/agent_memory.py"
+}

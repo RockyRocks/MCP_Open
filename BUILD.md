@@ -249,6 +249,92 @@ cp config/mcp_servers.json.example config/mcp_servers.json
 
 ---
 
+## Installing
+
+After building, use CMake's install step to create a deployable directory tree:
+
+```bash
+# Install to a local staging directory
+cmake --install build --config Release --prefix dist
+
+# Or install system-wide (Linux/macOS)
+sudo cmake --install build --config Release
+```
+
+The install layout follows GNU conventions:
+
+```text
+<prefix>/
+  bin/           mcp_server(.exe)
+  lib/           mcp_capi.{so,dylib,dll}
+  include/mcp/   mcp_capi.h, PluginABI.h, Version.h
+  share/mcp/
+    config/      *.example configuration files
+    plugins/     All plugin directories (scripts, skills, metadata)
+```
+
+Plugin binaries (`.so`/`.dll`) are installed alongside their plugin directories under `share/mcp/plugins/`.
+
+---
+
+## Docker
+
+### Build the image
+
+```bash
+docker build -t mcp-server .
+```
+
+### Run in stdio mode
+
+```bash
+docker run --rm -i mcp-server --stdio
+```
+
+### Run in HTTP mode with docker-compose
+
+```bash
+docker compose up
+```
+
+This starts both the MCP server (port 9001) and a LiteLLM proxy sidecar (port 4000). Mount your config and plugins:
+
+```yaml
+# docker-compose.yml volumes
+volumes:
+  - ./config:/opt/mcp/config:ro
+  - ./plugins:/opt/mcp/share/mcp/plugins
+```
+
+### Environment variables
+
+| Variable | Description |
+|---|---|
+| `MCP_PORT` | Server listen port (default: 9001) |
+| `ANTHROPIC_API_KEY` | Required for LLM tools via LiteLLM |
+| `LITELLM_MASTER_KEY` | LiteLLM proxy authentication key |
+
+---
+
+## Releasing
+
+Releases are automated via GitHub Actions. To create a release:
+
+1. Tag the commit with a version prefix:
+
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+2. The release pipeline builds on Linux, Windows, and macOS, runs tests, and creates platform archives.
+
+3. A Docker image is built and pushed to `ghcr.io/<owner>/MCP_Open`.
+
+4. A GitHub Release is created with all platform archives attached.
+
+---
+
 ## Troubleshooting
 
 ### CMake policy warning with nlohmann/json

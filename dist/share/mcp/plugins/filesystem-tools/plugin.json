@@ -1,0 +1,7 @@
+{
+  "name": "filesystem-tools",
+  "version": "1.0.0",
+  "description": "File system operations: read, write, edit, list, search, mkdir, delete",
+  "runtime": "python",
+  "entrypoint": "scripts/filesystem_tools.py"
+}

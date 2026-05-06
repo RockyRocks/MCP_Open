@@ -1,0 +1,128 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            archive: tar.gz
+            cmake_extra: -DBUILD_CSHARP=OFF
+          - os: windows-latest
+            archive: zip
+            cmake_extra: -DBUILD_CSHARP=OFF
+          - os: macos-latest
+            archive: tar.gz
+            cmake_extra: -DBUILD_CSHARP=OFF -DBUILD_DESKTOP_NOTIFICATION_PLUGIN=OFF
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python (Linux/macOS)
+        if: runner.os != 'Windows'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+          -DBUILD_EXAMPLE_PLUGIN=ON
+          ${{ matrix.cmake_extra }}
+
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} -j4
+
+      - name: Test
+        run: ctest --test-dir build --build-config ${{ env.BUILD_TYPE }} --output-on-failure --timeout 120
+
+      - name: Install
+        run: cmake --install build --config ${{ env.BUILD_TYPE }} --prefix staging
+
+      - name: Archive (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          ARCHIVE_NAME="mcp-server-${TAG_NAME}-${{ runner.os }}-${{ runner.arch }}.tar.gz"
+          tar -czf "$ARCHIVE_NAME" -C staging .
+          echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Archive (zip)
+        if: matrix.archive == 'zip'
+        run: |
+          $TagName = $env:GITHUB_REF -replace 'refs/tags/', ''
+          $ArchiveName = "mcp-server-${TagName}-${{ runner.os }}-${{ runner.arch }}.zip"
+          Compress-Archive -Path staging\* -DestinationPath $ArchiveName
+          "ARCHIVE_NAME=$ArchiveName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ env.ARCHIVE_NAME }}
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract tag
+        id: meta
+        run: echo "tag=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build, docker]
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/*

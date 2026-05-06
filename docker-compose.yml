@@ -1,0 +1,19 @@
+services:
+  mcp-server:
+    build: .
+    ports:
+      - "9001:9001"
+    volumes:
+      - ./config:/opt/mcp/config:ro
+      - ./plugins:/opt/mcp/share/mcp/plugins
+    environment:
+      - MCP_PORT=9001
+    command: ["--config", "config/mcp_config.json"]
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./config/litellm_config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml"]
