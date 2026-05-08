@@ -3,4 +3,5 @@ obj/
 .vs/
 *.suo
 build*/
+!plugins/build-tools/
 .vscode/settings.json

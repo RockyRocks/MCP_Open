@@ -202,24 +202,31 @@ MCP_Open/
 │   │   ├── IPlugin.h         #     Abstract C++ interface (mockable in tests)
 │   │   ├── DlPlugin.h        #     Concrete LoadLibrary/dlopen loader
 │   │   ├── NativePluginAdapter.h  # ICommandStrategy wrapper with fault isolation
-│   │   ├── NativePluginLoader.h  # Directory scanner, watcher, notify callback
+│   │   ├── NativePluginLoader.h   # Directory scanner, watcher, notify callback
 │   │   ├── ScriptPlugin.h    #     POD structs: ScriptPluginToolInfo, ScriptPlugin
-│   │   ├── ScriptPluginAdapter.h # ICommandStrategy wrapper — per-call subprocess spawn
-│   │   └── ScriptPluginLoader.h  # Scans plugin dirs for plugin.json with "runtime" key
+│   │   ├── ScriptPluginAdapter.h  # ICommandStrategy wrapper — per-call subprocess spawn
+│   │   ├── ScriptPluginLoader.h   # Scans plugin dirs for plugin.json with "runtime" key
+│   │   ├── StdioMCPAdapter.h #     ICommandStrategy wrapper for stdio-based MCP child servers
+│   │   └── SubprocessPipe.h  #     Cross-platform subprocess I/O (pimpl over subprocess.h)
 │   ├── security/             #   RateLimiter, ApiKeyValidator, SecurityHeaders
 │   ├── server/               #   IServer, HttplibServer, UwsServer, StdioTransport
 │   ├── skills/               #   SkillEngine, SkillCommand, SkillToolAdapter, PluginLoader
 │   └── validation/           #   InputSanitizer, JsonSchemaValidator
 ├── src/                      # Implementation files (mirrors include/)
-│   ├── plugins/              #   DlPlugin.cpp, NativePluginAdapter.cpp, NativePluginLoader.cpp
-│   │                         #   ScriptPluginAdapter.cpp, ScriptPluginLoader.cpp
+│   ├── plugins/              #   DlPlugin, NativePluginAdapter, NativePluginLoader,
+│   │                         #   ScriptPluginAdapter, ScriptPluginLoader,
+│   │                         #   StdioMCPAdapter, SubprocessPipe
 │   └── ...
 ├── plugins/                  # Plugin directory (loaded at runtime) — see plugins/README.md
-│   ├── desktop-notification/ #   Native plugin — desktop notifications
+│   ├── agent-memory/         #   Script plugin — persistent key-value memory store
+│   ├── build-tools/          #   Script plugin — build, test, and lint runners
+│   ├── desktop-notification/ #   Native plugin — desktop notifications (WinRT/notify-send/osascript)
 │   ├── example-plugin/       #   Reference native plugin (ping + base64_encode)
-│   ├── git-tools/            #   Script plugin — git operations
-│   ├── github-tools/         #   Script plugin — GitHub API integration
-│   ├── github-actions/       #   Script plugin — GitHub Actions management
+│   ├── filesystem-tools/     #   Script plugin — file system operations (read, write, edit, search)
+│   ├── git-tools/            #   Script plugin — git operations (status, changes, sync, conflicts)
+│   ├── github-tools/         #   Script plugin — GitHub API integration (PRs, issues, repos)
+│   ├── github-actions/       #   Script plugin — GitHub Actions management (workflows, logs, re-runs)
+│   ├── shell-tools/          #   Script plugin — shell command execution with timeout
 │   ├── entrian-search/       #   Skill plugin — Entrian source search
 │   ├── everything-search/    #   Skill plugin — Everything file search
 │   └── jira-tools/           #   Skill plugin — Jira integration (read-only)
@@ -232,9 +239,10 @@ MCP_Open/
 │   └── src/mcp_capi.cpp
 ├── csharp/                   # C# wrapper (McpClient.csproj)
 ├── config/                   # Example configuration files
-├── tests/                    # Unit tests (GTest / Catch2) — 179 tests (167 pass, 12 skip without Python)
+├── tests/                    # Unit tests (GTest / Catch2) — 202 tests
 │   └── test_plugins/         #   Fixture script plugins used by integration tests
-│       └── echo-plugin/      #     echo_tool + fail_tool Python plugin
+│       ├── echo-plugin/      #     echo_tool + fail_tool Python plugin
+│       └── stdio-echo/       #     Stdio-based MCP echo server for StdioMCPAdapter tests
 ├── litellm/                  # LiteLLM proxy launcher & config
 ├── CMakeLists.txt            # Build system
 └── BUILD.md                  # Detailed build instructions

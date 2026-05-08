@@ -1,0 +1,7 @@
+{
+  "name": "build-tools",
+  "version": "1.0.0",
+  "description": "Build, test, and lint runners with structured output parsing",
+  "runtime": "python",
+  "entrypoint": "scripts/build_tools.py"
+}
