@@ -67,11 +67,15 @@ public:
     static bool IsValidToolName(const std::string& name);
 
 private:
+    struct CancelState {
+        std::mutex mutex;
+        std::set<std::string> cancelledRequests;
+    };
+
     std::string          m_PluginName;
     std::string          m_Runtime;
     std::string          m_Entrypoint;
     ScriptPluginToolInfo m_ToolInfo;
 
-    std::mutex           m_CancelMutex;
-    std::set<std::string> m_CancelledRequests;
+    std::shared_ptr<CancelState> m_CancelState = std::make_shared<CancelState>();
 };

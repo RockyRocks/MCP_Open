@@ -3,10 +3,6 @@
 #include <string>
 #include <vector>
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 class SubprocessPipe {
 public:
     static std::unique_ptr<SubprocessPipe> Spawn(
@@ -23,15 +19,7 @@ public:
     SubprocessPipe& operator=(const SubprocessPipe&) = delete;
 
 private:
-    SubprocessPipe() = default;
-
-#ifdef _WIN32
-    HANDLE m_Process     = INVALID_HANDLE_VALUE;
-    HANDLE m_ChildStdinW = INVALID_HANDLE_VALUE;
-    HANDLE m_ChildStdoutR = INVALID_HANDLE_VALUE;
-#else
-    pid_t m_Pid        = -1;
-    int   m_StdinFd    = -1;
-    int   m_StdoutFd   = -1;
-#endif
+    SubprocessPipe();
+    struct Impl;
+    std::unique_ptr<Impl> m_Impl;
 };

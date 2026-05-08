@@ -44,6 +44,16 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(json jsv)
 
 # ------------------------------------------------------------------------------
+# subprocess.h (single-header cross-platform subprocess library)
+# ------------------------------------------------------------------------------
+FetchContent_Declare(
+  subprocess_h
+  GIT_REPOSITORY https://github.com/sheredom/subprocess.h.git
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(subprocess_h)
+
+# ------------------------------------------------------------------------------
 # cpp-httplib
 # ------------------------------------------------------------------------------
 # Disable httplib optional dependency auto-detection.
@@ -159,6 +169,7 @@ target_include_directories(core PUBLIC
   ${PROJECT_SOURCE_DIR}/include
   "${CMAKE_BINARY_DIR}/generated"
 )
+target_include_directories(core PRIVATE ${subprocess_h_SOURCE_DIR})
 target_link_libraries(core PUBLIC
   nlohmann_json::nlohmann_json
   nlohmann_json_schema_validator
