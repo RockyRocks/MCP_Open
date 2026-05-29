@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
         // Use a shared_ptr so the watcher lambda can capture it safely
         auto transportPtr = std::make_shared<StdioTransport>(
             commandRegistry, skillEngine, mcpRegistry,
-            std::cin, std::cout, "mcp-open", MCP_VERSION_STRING);
+            std::cin, std::cout, "toolsmith", TOOLSMITH_VERSION_STRING);
 
         // When a new plugin is hot-loaded at runtime, push a standard MCP
         // notifications/tools/list_changed event so the LLM client refreshes

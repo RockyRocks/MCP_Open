@@ -1,4 +1,6 @@
-# MCP Server (C++ / CMake)
+# ToolSmith
+
+**Forge any tool. Scale any workflow.**
 
 An enterprise-grade **Model Context Protocol (MCP)** server implemented in C++20. It exposes LLM tools, prompt-driven skills, and remote server discovery over both HTTP and stdio transports, following the MCP JSON-RPC 2.0 specification.
 
@@ -73,7 +75,7 @@ Route tool calls to other MCP servers via `config/mcp_servers.json`. Each server
 
 ### C API & C# Interop
 
-A shared-library C API (`mcp_capi`) exposes lifecycle, command, LLM, skill, and discovery functions for P/Invoke from .NET or any FFI-capable language.
+A shared-library C API (`toolsmith_capi`) exposes lifecycle, command, LLM, skill, and discovery functions for P/Invoke from .NET or any FFI-capable language.
 
 ---
 
@@ -131,8 +133,8 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 
 # Run
-./build/mcp_server                # HTTP mode (default)
-./build/mcp_server --stdio        # Stdio / MCP mode
+./build/toolsmith                # HTTP mode (default)
+./build/toolsmith --stdio        # Stdio / MCP mode
 ```
 
 #### Windows (Visual Studio)
@@ -140,15 +142,15 @@ cmake --build build --config Release
 ```powershell
 cmake -B build -G "Visual Studio 17 2022"
 cmake --build build --config Release
-build\Release\mcp_server.exe
+build\Release\toolsmith.exe
 ```
 
 ### Docker
 
 ```bash
 # Build and run
-docker build -t mcp-server .
-docker run --rm -i mcp-server --stdio
+docker build -t toolsmith .
+docker run --rm -i toolsmith --stdio
 
 # Or use docker-compose (includes LiteLLM sidecar)
 docker compose up
@@ -156,7 +158,7 @@ docker compose up
 
 ### Pre-built Binaries
 
-Download platform archives from [GitHub Releases](../../releases). Extract and run `bin/mcp_server`.
+Download platform archives from [GitHub Releases](../../releases). Extract and run `bin/toolsmith`.
 
 ### CMake Options
 
@@ -179,35 +181,35 @@ Register the server with [Claude Code](https://claude.ai/code) so it is availabl
 ##### Linux / macOS
 
 ```bash
-claude mcp add mcp-open -- /path/to/MCP_Open/build/mcp_server
+claude mcp add toolsmith -- /path/to/MCP_Open/build/toolsmith
 ```
 
 ##### Windows
 
 ```powershell
-claude mcp add mcp-open -- "C:\path\to\MCP_Open\build\Release\mcp_server.exe"
+claude mcp add toolsmith -- "C:\path\to\MCP_Open\build\Release\toolsmith.exe"
 ```
 
 With LiteLLM API keys (required for `llm` and `skill` tools):
 
 ```bash
 # Linux / macOS
-claude mcp add mcp-open \
+claude mcp add toolsmith \
   --env ANTHROPIC_API_KEY=sk-ant-... \
   --env LITELLM_MASTER_KEY=sk-litellm-... \
-  -- /path/to/build/mcp_server
+  -- /path/to/build/toolsmith
 
 # Windows
-claude mcp add mcp-open ^
+claude mcp add toolsmith ^
   --env ANTHROPIC_API_KEY=sk-ant-... ^
   --env LITELLM_MASTER_KEY=sk-litellm-... ^
-  -- "C:\path\to\build\Release\mcp_server.exe"
+  -- "C:\path\to\build\Release\toolsmith.exe"
 ```
 
 With MCP server API key (if `api_key` is set in `config/mcp_config.json`):
 
 ```bash
-claude mcp add mcp-open --env MCP_API_KEY=your-api-key -- /path/to/build/mcp_server
+claude mcp add toolsmith --env MCP_API_KEY=your-api-key -- /path/to/build/toolsmith
 ```
 
 #### Scope Options
@@ -220,17 +222,17 @@ claude mcp add mcp-open --env MCP_API_KEY=your-api-key -- /path/to/build/mcp_ser
 
 ```bash
 # Share with team via source control
-claude mcp add --scope project mcp-open -- /path/to/build/mcp_server
+claude mcp add --scope project toolsmith -- /path/to/build/toolsmith
 
 # Register globally for all projects
-claude mcp add --scope user mcp-open -- /path/to/build/mcp_server
+claude mcp add --scope user toolsmith -- /path/to/build/toolsmith
 ```
 
 #### Verify
 
 ```bash
-claude mcp list           # Confirm mcp-open appears
-claude mcp get mcp-open   # Inspect connection details
+claude mcp list           # Confirm toolsmith appears
+claude mcp get toolsmith   # Inspect connection details
 ```
 
 Or from within a Claude Code session: `/mcp`
@@ -254,17 +256,17 @@ Expose this server's tools to **every LLM** routed through your LiteLLM proxy �
 
 ```bash
 # Linux / macOS
-./build/mcp_server          # Listens on the port in config/mcp_config.json (default 8080)
+./build/toolsmith          # Listens on the port in config/mcp_config.json (default 8080)
 
 # Windows
-build\Release\mcp_server.exe
+build\Release\toolsmith.exe
 ```
 
 #### Step 2 — Add to `litellm/litellm_config.yaml`
 
 ```yaml
 mcp_servers:
-  mcp_open:
+  toolsmith:
     url: "http://localhost:8080"   # Match the port in config/mcp_config.json
     transport: "http"
     allow_all_keys: true           # Available to every API key / team
@@ -274,9 +276,9 @@ Alternatively, let the proxy spawn the process directly via stdio:
 
 ```yaml
 mcp_servers:
-  mcp_open:
+  toolsmith:
     transport: "stdio"
-    command: "/path/to/build/mcp_server"
+    command: "/path/to/build/toolsmith"
     args: ["--stdio"]
     env:
       MCP_API_KEY: os.environ/MCP_API_KEY
@@ -375,4 +377,4 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 
 **Attribution requirement:** If you use this MCP server or any part of its codebase in your project, you must give appropriate credit to the original author by including the following notice in your documentation or source:
 
-> MCP Server (C++ / CMake) by Rakesh Kumar Raparla — [github.com/rraparla](https://github.com/rraparla)
+> ToolSmith by Rakesh Kumar Raparla — [github.com/rraparla](https://github.com/rraparla)

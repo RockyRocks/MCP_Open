@@ -227,6 +227,8 @@ MCP_Open/
 │   ├── github-tools/         #   Script plugin — GitHub API integration (PRs, issues, repos)
 │   ├── github-actions/       #   Script plugin — GitHub Actions management (workflows, logs, re-runs)
 │   ├── shell-tools/          #   Script plugin — shell command execution with timeout
+│   ├── unity-tools/          #   Script plugin — Unity3D project info, build, test, asset search, logs
+│   ├── unreal-tools/         #   Native plugin — Unreal Engine project info, build, test, assets, logs
 │   ├── entrian-search/       #   Skill plugin — Entrian source search
 │   ├── everything-search/    #   Skill plugin — Everything file search
 │   └── jira-tools/           #   Skill plugin — Jira integration (read-only)

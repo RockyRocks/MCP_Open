@@ -29,7 +29,7 @@ public:
         std::shared_ptr<McpServerRegistry> mcpRegistry,
         std::istream& input = std::cin,
         std::ostream& output = std::cout,
-        const std::string& serverName = "mcp-open",
+        const std::string& serverName = "toolsmith",
         const std::string& serverVersion = "1.0.0"
     );
 

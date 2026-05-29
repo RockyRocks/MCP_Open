@@ -97,7 +97,7 @@ TEST(StdioTransportTest, InitializeReturnsCapabilities) {
     EXPECT_EQ(result["protocolVersion"], "2024-11-05");
     EXPECT_TRUE(result["capabilities"].contains("tools"));
     EXPECT_TRUE(result["capabilities"].contains("prompts"));
-    EXPECT_EQ(result["serverInfo"]["name"], "mcp-open");
+    EXPECT_EQ(result["serverInfo"]["name"], "toolsmith");
 }
 
 TEST(StdioTransportTest, ToolsListReturnsRegisteredTools) {

@@ -1,0 +1,7 @@
+{
+  "name": "unity-tools",
+  "version": "1.0.0",
+  "description": "Unity3D development tools — project info, build, test, asset search, log analysis, C# checks",
+  "runtime": "python",
+  "entrypoint": "scripts/unity_tools.py"
+}

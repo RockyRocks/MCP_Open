@@ -31,15 +31,15 @@ general_settings:
 #   Uncomment the stdio block and set the absolute path to the executable.
 # ---------------------------------------------------------------------------
 mcp_servers:
-  mcp_open:
+  toolsmith:
     # Option A: HTTP (recommended)
     url: "http://localhost:8080"
     transport: "http"
     allow_all_keys: true   # available to every API key / team
 
-  # mcp_open_stdio:
+  # toolsmith_stdio:
   #   transport: "stdio"
-  #   command: "/path/to/build/mcp_server"
+  #   command: "/path/to/build/toolsmith"
   #   args: ["--stdio"]
   #   env:
   #     MCP_API_KEY: os.environ/MCP_API_KEY

@@ -14,7 +14,7 @@ RUN cmake -S . -B build \
     -DBUILD_EXAMPLE_PLUGIN=ON \
     -DBUILD_DESKTOP_NOTIFICATION_PLUGIN=OFF \
     && cmake --build build --config Release -j$(nproc) \
-    && cmake --install build --prefix /opt/mcp
+    && cmake --install build --prefix /opt/toolsmith
 
 FROM ubuntu:24.04 AS runtime
 
@@ -22,10 +22,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /opt/mcp /opt/mcp
+COPY --from=build /opt/toolsmith /opt/toolsmith
 
-ENV PATH="/opt/mcp/bin:${PATH}"
-WORKDIR /opt/mcp
+ENV PATH="/opt/toolsmith/bin:${PATH}"
+WORKDIR /opt/toolsmith
 
-ENTRYPOINT ["mcp_server"]
+ENTRYPOINT ["toolsmith"]
 CMD ["--stdio"]

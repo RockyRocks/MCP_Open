@@ -299,7 +299,7 @@ The Markdown body after the closing `---` becomes the `prompt_template`. Use `{{
 curl http://localhost:8080/skills
 
 # Verify via MCP stdio
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | ./build/mcp_server --stdio
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | ./build/toolsmith --stdio
 ```
 
 4. Optionally configure the plugins directory in `config/mcp_config.json`:
@@ -328,7 +328,7 @@ echo '{
       "language": "cpp"
     }
   }
-}' | ./build/mcp_server --stdio
+}' | ./build/toolsmith --stdio
 ```
 
 ### Parallel Skill Execution
@@ -386,3 +386,44 @@ A tool can include a `"chain"` field in its result to immediately invoke another
 | `ScriptPlugin` (Python/Node/C#) | Yes | Yes |
 
 Maximum chain depth is **5** (`kMaxChainDepth`). Exceeding it returns the last result without further chaining and logs a warning.
+
+---
+
+## Game Engine Reference Plugins
+
+Two starter plugins are provided as reference implementations for game engine tooling:
+
+### Unity3D — Script Plugin (`unity-tools/`)
+
+A **Python script plugin** demonstrating the full script plugin pattern for Unity development. Drop-in ready — no compilation required.
+
+| Tool | Description |
+| ---- | ----------- |
+| `unity_project_info` | Read ProjectSettings for editor version, company, product, scripting backend |
+| `unity_build` | Trigger Unity batch-mode build with target/method selection |
+| `unity_run_tests` | Run EditMode/PlayMode tests, parse NUnit XML results |
+| `unity_asset_search` | Search Assets/ by name glob, extension, and directory |
+| `unity_log_parser` | Parse Editor.log for errors/warnings (auto-detects default path) |
+| `unity_csharp_check` | Scan C# files for common issues (missing namespaces, empty catches, etc.) |
+
+Use this as a template for any script-based game engine plugin.
+
+### Unreal Engine — Native Plugin (`unreal-tools/`)
+
+A **C++ native plugin** demonstrating the full C ABI pattern for Unreal Engine development. Compiled to a `.dll`/`.so` and hot-reloaded by the server.
+
+| Tool | Description |
+| ---- | ----------- |
+| `ue_project_info` | Parse .uproject for engine version, modules, plugins |
+| `ue_build` | Invoke RunUAT BuildCookRun with target/config/platform |
+| `ue_run_tests` | Run UE automation tests via editor batch commands |
+| `ue_asset_search` | Search Content/ for .uasset/.umap by pattern |
+| `ue_log_parser` | Parse UE log files with severity and category filtering |
+| `ue_module_info` | Scan Source/ for .Build.cs and .Target.cs modules |
+
+Use this as a template for any native game engine plugin. Key patterns demonstrated:
+
+- Self-contained JSON helpers (no external dependencies)
+- `std::filesystem` for directory traversal
+- `popen()`/`_popen()` for cross-platform subprocess execution
+- Proper heap allocation for response strings

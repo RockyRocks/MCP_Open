@@ -1,6 +1,6 @@
 # Build Instructions
 
-Cross-platform build guide for MCP_Server_CMake covering Windows, Linux, and macOS.
+Cross-platform build guide for ToolSmith covering Windows, Linux, and macOS.
 
 ---
 
@@ -60,10 +60,10 @@ brew install cmake
 | Target | Type | Description |
 |---|---|---|
 | `core` | Static library | Core MCP server library (all modules) |
-| `mcp_server` | Executable | Main server entry point |
+| `toolsmith` | Executable | Main server entry point |
 | `demo_client` | Executable | Demo client for testing |
-| `mcp_capi` | Shared library | C API shared library for interop (P/Invoke) |
-| `mcp_csharp` | Custom target | C# wrapper (`McpClient.dll`), depends on `mcp_capi` |
+| `toolsmith_capi` | Shared library | C API shared library for interop (P/Invoke) |
+| `mcp_csharp` | Custom target | C# wrapper (`McpClient.dll`), depends on `toolsmith_capi` |
 | `unit_tests` | Executable | All unit tests (GTest or Catch2) |
 
 ---
@@ -83,7 +83,7 @@ cmake --build build --config Release
 cmake --build build --config Debug
 
 # Run server
-build\Release\mcp_server.exe
+build\Release\toolsmith.exe
 ```
 
 With optional flags:
@@ -110,7 +110,7 @@ cmake -S . -B build
 cmake --build build -j$(nproc)
 
 # Run server
-./build/mcp_server
+./build/toolsmith
 ```
 
 To use Clang instead of GCC:
@@ -137,7 +137,7 @@ cmake -S . -B build
 cmake --build build -j$(sysctl -n hw.ncpu)
 
 # Run server
-./build/mcp_server
+./build/toolsmith
 ```
 
 With optional flags:
@@ -172,7 +172,7 @@ build\Release\unit_tests.exe  # Windows
 cmake --build build --target core
 
 # Build only the C API shared library
-cmake --build build --target mcp_capi
+cmake --build build --target toolsmith_capi
 
 # Build only the C# wrapper
 cmake --build build --target mcp_csharp
@@ -265,15 +265,15 @@ The install layout follows GNU conventions:
 
 ```text
 <prefix>/
-  bin/           mcp_server(.exe)
-  lib/           mcp_capi.{so,dylib,dll}
-  include/mcp/   mcp_capi.h, PluginABI.h, Version.h
-  share/mcp/
-    config/      *.example configuration files
-    plugins/     All plugin directories (scripts, skills, metadata)
+  bin/               toolsmith(.exe)
+  lib/               toolsmith_capi.{so,dylib,dll}
+  include/toolsmith/ mcp_capi.h, PluginABI.h, Version.h
+  share/toolsmith/
+    config/          *.example configuration files
+    plugins/         All plugin directories (scripts, skills, metadata)
 ```
 
-Plugin binaries (`.so`/`.dll`) are installed alongside their plugin directories under `share/mcp/plugins/`.
+Plugin binaries (`.so`/`.dll`) are installed alongside their plugin directories under `share/toolsmith/plugins/`.
 
 ---
 
@@ -282,13 +282,13 @@ Plugin binaries (`.so`/`.dll`) are installed alongside their plugin directories 
 ### Build the image
 
 ```bash
-docker build -t mcp-server .
+docker build -t toolsmith .
 ```
 
 ### Run in stdio mode
 
 ```bash
-docker run --rm -i mcp-server --stdio
+docker run --rm -i toolsmith --stdio
 ```
 
 ### Run in HTTP mode with docker-compose
@@ -302,8 +302,8 @@ This starts both the MCP server (port 9001) and a LiteLLM proxy sidecar (port 40
 ```yaml
 # docker-compose.yml volumes
 volumes:
-  - ./config:/opt/mcp/config:ro
-  - ./plugins:/opt/mcp/share/mcp/plugins
+  - ./config:/opt/toolsmith/config:ro
+  - ./plugins:/opt/toolsmith/share/mcp/plugins
 ```
 
 ### Environment variables

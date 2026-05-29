@@ -58,7 +58,7 @@ jobs:
         if: matrix.archive == 'tar.gz'
         run: |
           TAG_NAME=${GITHUB_REF#refs/tags/}
-          ARCHIVE_NAME="mcp-server-${TAG_NAME}-${{ runner.os }}-${{ runner.arch }}.tar.gz"
+          ARCHIVE_NAME="toolsmith-${TAG_NAME}-${{ runner.os }}-${{ runner.arch }}.tar.gz"
           tar -czf "$ARCHIVE_NAME" -C staging .
           echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> "$GITHUB_ENV"
         shell: bash
@@ -67,7 +67,7 @@ jobs:
         if: matrix.archive == 'zip'
         run: |
           $TagName = $env:GITHUB_REF -replace 'refs/tags/', ''
-          $ArchiveName = "mcp-server-${TagName}-${{ runner.os }}-${{ runner.arch }}.zip"
+          $ArchiveName = "toolsmith-${TagName}-${{ runner.os }}-${{ runner.arch }}.zip"
           Compress-Archive -Path staging\* -DestinationPath $ArchiveName
           "ARCHIVE_NAME=$ArchiveName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
         shell: pwsh

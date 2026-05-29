@@ -1,0 +1,8 @@
+{
+  "name": "unreal-tools",
+  "version": "1.0.0",
+  "description": "Unreal Engine development tools — project info, build, test, asset search, log analysis, module info",
+  "mcp_plugin": true,
+  "binary": "bin/unreal-tools.dll",
+  "platforms": ["win32", "linux", "darwin"]
+}

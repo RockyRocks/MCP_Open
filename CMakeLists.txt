@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.16)
 cmake_policy(SET CMP0077 NEW)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
-project(MCP_Server_CMake VERSION 1.0.0 LANGUAGES CXX)
+project(ToolSmith VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Build all static libraries with -fPIC so they can be linked into shared libs (mcp_capi)
+# Build all static libraries with -fPIC so they can be linked into shared libs (toolsmith_capi)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Generate Version.h from template
@@ -212,8 +212,8 @@ endif()
 # ------------------------------------------------------------------------------
 # Server executable
 # ------------------------------------------------------------------------------
-add_executable(mcp_server src/server_entry.cpp)
-target_link_libraries(mcp_server PRIVATE core)
+add_executable(toolsmith src/server_entry.cpp)
+target_link_libraries(toolsmith PRIVATE core)
 
 # ------------------------------------------------------------------------------
 # Demo client
@@ -224,13 +224,13 @@ target_link_libraries(demo_client PRIVATE core)
 # ------------------------------------------------------------------------------
 # C API shared library
 # ------------------------------------------------------------------------------
-add_library(mcp_capi SHARED capi/src/mcp_capi.cpp)
-target_include_directories(mcp_capi
+add_library(toolsmith_capi SHARED capi/src/mcp_capi.cpp)
+target_include_directories(toolsmith_capi
   PUBLIC capi/include
   PRIVATE ${PROJECT_SOURCE_DIR}/include
 )
-target_link_libraries(mcp_capi PRIVATE core)
-target_compile_definitions(mcp_capi PRIVATE MCP_CAPI_EXPORTS)
+target_link_libraries(toolsmith_capi PRIVATE core)
+target_compile_definitions(toolsmith_capi PRIVATE MCP_CAPI_EXPORTS)
 
 # ------------------------------------------------------------------------------
 # C# wrapper (built via dotnet, triggered from CMake)
@@ -242,7 +242,7 @@ if(BUILD_CSHARP)
       COMMAND ${DOTNET_EXE} build ${CMAKE_SOURCE_DIR}/csharp/McpClient.csproj
               -c $<IF:$<CONFIG:Debug>,Debug,Release>
               -o ${CMAKE_BINARY_DIR}/csharp
-      DEPENDS mcp_capi
+      DEPENDS toolsmith_capi
       COMMENT "Building C# wrapper (McpClient)"
       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/csharp
     )
@@ -352,35 +352,54 @@ if(BUILD_EXAMPLE_PLUGIN)
 endif()
 
 # ------------------------------------------------------------------------------
+# Unreal Engine tools native plugin (builds into plugins/unreal-tools/bin/)
+# ------------------------------------------------------------------------------
+option(BUILD_UNREAL_TOOLS_PLUGIN "Build the unreal-tools native plugin" ON)
+if(BUILD_UNREAL_TOOLS_PLUGIN)
+  add_library(unreal-tools SHARED
+    plugins/unreal-tools/src/unreal-tools.cpp
+  )
+  target_include_directories(unreal-tools PRIVATE ${PROJECT_SOURCE_DIR}/include)
+  set_target_properties(unreal-tools PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/unreal-tools/bin"
+    LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/plugins/unreal-tools/bin"
+  )
+  if(CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT MSVC)
+    target_compile_options(unreal-tools PRIVATE -fvisibility=hidden)
+  endif()
+  message(STATUS "Building unreal-tools -> plugins/unreal-tools/bin/")
+endif()
+
+# ------------------------------------------------------------------------------
 # Install targets
 # ------------------------------------------------------------------------------
 include(GNUInstallDirs)
 
-install(TARGETS mcp_server RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS toolsmith RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-install(TARGETS mcp_capi
+install(TARGETS toolsmith_capi
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 install(FILES capi/include/mcp_capi.h
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/mcp
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/toolsmith
 )
 install(FILES include/plugins/PluginABI.h
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/mcp
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/toolsmith
 )
 install(FILES "${CMAKE_BINARY_DIR}/generated/core/Version.h"
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/mcp
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/toolsmith
 )
 
 install(DIRECTORY config/
-  DESTINATION ${CMAKE_INSTALL_DATADIR}/mcp/config
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/toolsmith/config
   FILES_MATCHING PATTERN "*.example"
 )
 
 install(DIRECTORY plugins/
-  DESTINATION ${CMAKE_INSTALL_DATADIR}/mcp/plugins
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/toolsmith/plugins
   PATTERN "bin" EXCLUDE
   PATTERN "__pycache__" EXCLUDE
   PATTERN "*.pyc" EXCLUDE
@@ -389,14 +408,21 @@ install(DIRECTORY plugins/
 
 if(BUILD_DESKTOP_NOTIFICATION_PLUGIN)
   install(TARGETS desktop-notification
-    RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/mcp/plugins/desktop-notification/bin
-    LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/mcp/plugins/desktop-notification/bin
+    RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/toolsmith/plugins/desktop-notification/bin
+    LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/toolsmith/plugins/desktop-notification/bin
   )
 endif()
 
 if(BUILD_EXAMPLE_PLUGIN)
   install(TARGETS example-plugin
-    RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/mcp/plugins/example-plugin/bin
-    LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/mcp/plugins/example-plugin/bin
+    RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/toolsmith/plugins/example-plugin/bin
+    LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/toolsmith/plugins/example-plugin/bin
+  )
+endif()
+
+if(BUILD_UNREAL_TOOLS_PLUGIN)
+  install(TARGETS unreal-tools
+    RUNTIME DESTINATION ${CMAKE_INSTALL_DATADIR}/toolsmith/plugins/unreal-tools/bin
+    LIBRARY DESTINATION ${CMAKE_INSTALL_DATADIR}/toolsmith/plugins/unreal-tools/bin
   )
 endif()

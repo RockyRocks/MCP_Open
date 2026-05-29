@@ -5,7 +5,7 @@ namespace McpClient
 {
     internal static class NativeMethods
     {
-        private const string LibName = "mcp_capi";
+        private const string LibName = "toolsmith_capi";
 
         [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
         internal static extern IntPtr mcp_server_create(

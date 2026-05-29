@@ -53,7 +53,7 @@ bool StdioMCPAdapter::EnsureRunning() {
             {"params", {
                 {"protocolVersion", "2024-11-05"},
                 {"capabilities", nlohmann::json::object()},
-                {"clientInfo", {{"name", "mcp-server-cmake"}, {"version", MCP_VERSION_STRING}}}
+                {"clientInfo", {{"name", "toolsmith"}, {"version", TOOLSMITH_VERSION_STRING}}}
             }}
         };
 
@@ -265,7 +265,7 @@ std::vector<ScriptPluginToolInfo> StdioMCPAdapter::DiscoverTools(
         {"params", {
             {"protocolVersion", "2024-11-05"},
             {"capabilities", nlohmann::json::object()},
-            {"clientInfo", {{"name", "mcp-server-cmake"}, {"version", MCP_VERSION_STRING}}}
+            {"clientInfo", {{"name", "toolsmith"}, {"version", TOOLSMITH_VERSION_STRING}}}
         }}
     };
 
