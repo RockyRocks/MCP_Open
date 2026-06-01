@@ -49,7 +49,7 @@ FetchContent_MakeAvailable(json jsv)
 FetchContent_Declare(
   subprocess_h
   GIT_REPOSITORY https://github.com/sheredom/subprocess.h.git
-  GIT_TAG master
+  GIT_TAG b0c3e4f6491da6aef71ffa3beaa083e22f6855f5
 )
 FetchContent_MakeAvailable(subprocess_h)
 
