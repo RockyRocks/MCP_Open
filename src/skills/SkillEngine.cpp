@@ -23,7 +23,14 @@ void SkillEngine::LoadFromDirectory(const std::string& skillsDir) {
             SkillDefinition skill;
             skill.m_Name = data.value("name", "");
             skill.m_Description = data.value("description", "");
-            skill.m_PromptTemplate = data.value("prompt_template", "");
+            if (data.contains("prompt_template") && data["prompt_template"].is_array()) {
+                for (const auto& line : data["prompt_template"]) {
+                    if (!skill.m_PromptTemplate.empty()) skill.m_PromptTemplate += "\n";
+                    skill.m_PromptTemplate += line.get<std::string>();
+                }
+            } else {
+                skill.m_PromptTemplate = data.value("prompt_template", "");
+            }
             skill.m_DefaultModel = data.value("default_model", "");
             skill.m_DefaultParameters = data.value("default_parameters", nlohmann::json::object());
 
@@ -33,7 +40,14 @@ void SkillEngine::LoadFromDirectory(const std::string& skillsDir) {
                 }
             }
 
-            skill.m_SystemPrompt = data.value("system_prompt", "");
+            if (data.contains("system_prompt") && data["system_prompt"].is_array()) {
+                for (const auto& line : data["system_prompt"]) {
+                    if (!skill.m_SystemPrompt.empty()) skill.m_SystemPrompt += "\n";
+                    skill.m_SystemPrompt += line.get<std::string>();
+                }
+            } else {
+                skill.m_SystemPrompt = data.value("system_prompt", "");
+            }
             if (data.contains("rules") && data["rules"].is_array()) {
                 for (const auto& r : data["rules"]) {
                     skill.m_Rules.push_back(r.get<std::string>());
