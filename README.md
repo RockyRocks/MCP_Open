@@ -1,8 +1,12 @@
 # ToolSmith
 
+<img src=".\images\Logo.png" align="right" width="120" alt="Project Logo" />
+
 **Forge any tool. Scale any workflow.**
 
 An enterprise-grade **Model Context Protocol (MCP)** server implemented in C++20. It exposes LLM tools, prompt-driven skills, and remote server discovery over both HTTP and stdio transports, following the MCP JSON-RPC 2.0 specification.
+
+<br clear="right"/>
 
 ---
 
